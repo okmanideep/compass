@@ -12,18 +12,31 @@ import java.util.UUID
 data class Page(
     val type: String,
     val args: Parcelable? = null
-): Parcelable
+) : Parcelable
 
 @Composable
 fun getNavController(): NavController {
     val navContext = LocalNavContext.current
-        ?: throw IllegalStateException("Make sure you have wrapped your compose UI with RootNavContextProvider")
+        ?: remember {
+            object : NavContext {
+                override fun owner(): NavController? {
+                    return null
+                }
+
+                override fun controller(): NavController {
+                    return NavController(this)
+                }
+            }
+        }
+
     return navContext.controller()
 }
 
 class NavController(private val navContext: NavContext) {
     private var hostController: NavHostController? = null
     var state by mutableStateOf(NavStackState())
+        private set
+    var canGoBack by mutableStateOf(false)
         private set
 
     fun attachNavHostController(navHostController: NavHostController) {
@@ -34,6 +47,7 @@ class NavController(private val navContext: NavContext) {
         hostController = navHostController
         navHostController.setStateChangedListener { state ->
             this.state = state
+            this.canGoBack = navHostController.canGoBack()
         }
     }
 
@@ -51,56 +65,18 @@ class NavController(private val navContext: NavContext) {
         } ?: navContext.owner()?.navigateTo(page, popUpTo)
     }
 
-    fun goBack(): Boolean {
-        return hostController?.goBack() ?: false
-    }
-}
-
-interface NavControllerRegistry {
-    fun registerNavController(navController: NavController)
-    fun unregisterNavController(navController: NavController)
-}
-
-@Composable
-fun NavControllerRegistry.RootNavContextProvider(content: @Composable () -> Unit) {
-    val registry = this
-    val rootNavContext = remember {
-        RootNavContext()
-    }
-    val controller = rootNavContext.controller()
-
-    DisposableEffect(controller, registry) {
-        registry.registerNavController(controller)
-
-        onDispose {
-            registry.unregisterNavController(controller)
+    fun goBack() {
+        if (hostController?.goBack() != true) {
+            navContext.owner()?.goBack()
         }
     }
-
-    CompositionLocalProvider(LocalNavContext provides rootNavContext) {
-        content()
-    }
-}
-
-fun Context.findNavControllerRegistry(): NavControllerRegistry? {
-    var currentContext = this
-    while (true) {
-        if (currentContext is NavControllerRegistry) return currentContext
-        if (currentContext is ContextWrapper) {
-            currentContext = currentContext.baseContext
-            continue
-        }
-
-        break
-    }
-
-    return null
 }
 
 interface NavHostController {
     fun setStateChangedListener(listener: (NavStackState) -> Unit)
     fun canNavigateTo(page: Page): Boolean
     fun navigateTo(page: Page, popUpTo: Boolean = false)
+    fun canGoBack(): Boolean
     fun goBack(): Boolean
 }
 
@@ -110,20 +86,6 @@ interface NavContext {
 }
 
 val LocalNavContext = compositionLocalOf<NavContext?> { null }
-
-class RootNavContext(): NavContext {
-    private val controller by lazy {
-        NavController(this)
-    }
-
-    override fun owner(): NavController? {
-        return null
-    }
-
-    override fun controller(): NavController {
-        return controller
-    }
-}
 
 data class NavStackEntry(
     val page: Page,
@@ -168,7 +130,7 @@ data class NavStackState(
         }
 
         return backStack
-            .filterIndexed { index, _ -> index == topIndex || index == bottomIndex  }
+            .filterIndexed { index, _ -> index == topIndex || index == bottomIndex }
     }
 }
 
@@ -212,7 +174,9 @@ internal data class NavStack(
         val pageIndex = cleanBackStack.indexOfFirst { it.page.type == pageType }
         if (pageIndex < 0 || pageIndex == cleanBackStack.size - 1) return NavStack(cleanBackStack)
 
-        return copy(backStack = cleanBackStack.take(pageIndex) + cleanBackStack[pageIndex] + cleanBackStack.last().apply { isClosing = true })
+        return copy(
+            backStack = cleanBackStack.take(pageIndex) + cleanBackStack[pageIndex] + cleanBackStack.last()
+                .apply { isClosing = true })
     }
 
     fun popUpTo(page: Page): NavStack {
@@ -221,7 +185,9 @@ internal data class NavStack(
         val pageIndex = cleanBackStack.indexOfFirst { it.page.type == page.type }
         if (pageIndex < 0 || pageIndex == cleanBackStack.size - 1) return NavStack(cleanBackStack)
 
-        return copy(backStack = cleanBackStack.take(pageIndex) + cleanBackStack[pageIndex] + cleanBackStack.last().apply { isClosing = true })
+        return copy(
+            backStack = cleanBackStack.take(pageIndex) + cleanBackStack[pageIndex] + cleanBackStack.last()
+                .apply { isClosing = true })
     }
 
     fun addOrPopUpTo(page: Page): NavStack {
@@ -230,7 +196,9 @@ internal data class NavStack(
         val pageIndex = cleanBackStack.indexOfFirst { it.page.type == page.type }
         if (pageIndex < 0 || pageIndex == cleanBackStack.size - 1) return add(page)
 
-        return copy(backStack = cleanBackStack.take(pageIndex) + cleanBackStack[pageIndex] + cleanBackStack.last().apply { isClosing = true })
+        return copy(
+            backStack = cleanBackStack.take(pageIndex) + cleanBackStack[pageIndex] + cleanBackStack.last()
+                .apply { isClosing = true })
     }
 
     fun canGoBack(): Boolean = cleanBackStack().size > 1

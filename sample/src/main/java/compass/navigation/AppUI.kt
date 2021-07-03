@@ -2,8 +2,12 @@ package compass.navigation
 
 import android.os.Parcelable
 import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.Button
+import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -91,30 +95,65 @@ fun App() {
         page(PageType.DETAIL.key) {
             DetailPageUI(DetailPage.from(it))
         }
-
-        page(PageType.WATCH.key) {
-            WatchPageUI(WatchPage.from(it))
-        }
     }
 }
 
 @Composable
 fun HomePageUI() {
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier
+        .fillMaxSize()
+        .background(MaterialTheme.colors.background)
+    ) {
         Text(text = "HOME", modifier = Modifier.align(Alignment.Center))
     }
 }
 
 @Composable
 fun DetailPageUI(page: DetailPage) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        Text(text = "DETAIL - ${page.contentId}", modifier = Modifier.align(Alignment.Center))
+    Box(modifier = Modifier
+        .fillMaxSize()
+        .background(MaterialTheme.colors.background)
+    ){
+        val detailNavController = getNavController()
+        StackNavHost(navController = detailNavController
+            , startDestination = page.toPage()) {
+            page(PageType.DETAIL.key) {
+                Box(modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colors.background)
+                ) {
+                    val detailPage = DetailPage.from(it)
+                    Column(modifier = Modifier.align(Alignment.Center)) {
+                        Text(
+                            text = "DETAIL - ${page.contentId}",
+                        )
+
+                        Button(onClick = {
+                            detailNavController.navigateTo(
+                                WatchPage(detailPage.contentId).toPage(),
+                                false
+                            )
+                        }) {
+                            Text("WATCH")
+                        }
+                    }
+                }
+            }
+
+            page(PageType.WATCH.key) {
+                WatchPageUI(page = WatchPage.from(it))
+            }
+
+        }
     }
 }
 
 @Composable
 fun WatchPageUI(page: WatchPage) {
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier
+        .fillMaxSize()
+        .background(MaterialTheme.colors.background)
+    ){
         Text(text = "WATCH - ${page.contentId}", modifier = Modifier.align(Alignment.Center))
     }
 }

@@ -10,40 +10,21 @@ import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import compass.NavController
-import compass.NavControllerRegistry
-import compass.RootNavContextProvider
 import compass.navigation.ui.theme.CompassTheme
 
-class MainActivity : ComponentActivity(), NavControllerRegistry {
+class MainActivity : ComponentActivity(){
     private var rootNavController: NavController? = null
 
     @ExperimentalAnimationApi
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            RootNavContextProvider {
-                CompassTheme {
-                    // A surface container using the 'background' color from the theme
-                    Surface(color = MaterialTheme.colors.background) {
-                        App()
-                    }
+            CompassTheme {
+                // A surface container using the 'background' color from the theme
+                Surface(color = MaterialTheme.colors.background) {
+                    App()
                 }
             }
-        }
-    }
-
-    override fun registerNavController(navController: NavController) {
-        rootNavController = navController
-    }
-
-    override fun unregisterNavController(navController: NavController) {
-        check(rootNavController === navController)
-        rootNavController = null
-    }
-
-    override fun onBackPressed() {
-        if (rootNavController?.goBack() == false) {
-            super.onBackPressed()
         }
     }
 }

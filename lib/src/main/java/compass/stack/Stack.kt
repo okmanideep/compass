@@ -1,15 +1,12 @@
 package compass.stack
 
-import android.util.Log
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.foundation.layout.Box
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -17,7 +14,6 @@ import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import compass.*
-import compass.NavStack
 
 internal class Pages(
     val pageContentByType: Map<String, @Composable (Page) -> Unit>
@@ -65,7 +61,7 @@ fun StackNavHost(
         "StackNavHost requires a ViewModelStoreOwner to be provided via LocalViewModelStoreOwner"
     }
 
-    val stackNavViewModel = remember (pages, navController, viewModelStoreOwner) {
+    val stackNavViewModel = remember(pages, navController, viewModelStoreOwner) {
         stackNavViewModel(
             pages = pages,
             navController = navController,
@@ -86,6 +82,9 @@ fun StackNavHost(
     }
 
     val activeEntries = navController.state.activeEntries()
+    val canGoBack = navController.canGoBack
+
+    BackHandler(enabled = canGoBack, onBack = { stackNavViewModel.goBack() })
 
     Box(modifier = modifier) {
         for (entry in activeEntries) {
@@ -123,7 +122,7 @@ private fun stackNavViewModel(
     navController: NavController,
     viewModelStoreOwner: ViewModelStoreOwner
 ): StackNavViewModel {
-    val factory = object: ViewModelProvider.Factory {
+    val factory = object : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel?> create(modelClass: Class<T>): T {
             return StackNavViewModel(pages, navController) as T
@@ -136,14 +135,16 @@ private fun stackNavViewModel(
 internal class StackNavViewModel(
     private val pages: Pages,
     private val navController: NavController
-): ViewModel(), NavHostController {
+) : ViewModel(), NavHostController {
     private var navStack = NavStack(emptyList())
     private var listener: ((NavStackState) -> Unit)? = null
     private val scopeByEntryId = mutableMapOf<String, BackStackEntryScope>()
+    var canGoBack by mutableStateOf(false)
+        private set
 
     override fun setStateChangedListener(listener: (NavStackState) -> Unit) {
         this.listener = listener
-        invokeListener()
+        onStateUpdated()
     }
 
     override fun canNavigateTo(page: Page): Boolean {
@@ -153,14 +154,18 @@ internal class StackNavViewModel(
     override fun navigateTo(page: Page, popUpTo: Boolean) {
         navStack = if (popUpTo) navStack.addOrPopUpTo(page) else navStack.add(page)
 
-        invokeListener()
+        onStateUpdated()
+    }
+
+    override fun canGoBack(): Boolean {
+        return navStack.canGoBack()
     }
 
     override fun goBack(): Boolean {
         val canGoBack = navStack.canGoBack()
         if (canGoBack) {
             navStack = navStack.pop()
-            invokeListener()
+            onStateUpdated()
         }
 
         return canGoBack
@@ -182,7 +187,8 @@ internal class StackNavViewModel(
         return scope
     }
 
-    private fun invokeListener() {
+    private fun onStateUpdated() {
+        canGoBack = navStack.canGoBack()
         listener?.invoke(navStack.toNavStackState())
     }
 
@@ -199,8 +205,8 @@ internal class StackNavViewModel(
     }
 }
 
-internal class BackStackEntryScope(private val baseController: NavController)
-    : NavContext, ViewModelStoreOwner {
+internal class BackStackEntryScope(private val baseController: NavController) : NavContext,
+    ViewModelStoreOwner {
     private val controller by lazy {
         NavController(this)
     }
