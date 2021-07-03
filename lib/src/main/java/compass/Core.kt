@@ -3,6 +3,7 @@ package compass
 import android.content.Context
 import android.content.ContextWrapper
 import android.os.Parcelable
+import android.util.Log
 import androidx.compose.runtime.*
 import kotlinx.parcelize.Parcelize
 import java.util.UUID
@@ -198,11 +199,11 @@ internal data class NavStack(
     fun pop(): NavStack {
         val cleanBackStack = backStack.takeWhile { !it.isClosing }
         check(cleanBackStack.isNotEmpty()) { "Cannot pop. Nothing in stack" }
-        check(cleanBackStack.size == 1) { "Only one item in the stack. Cannot pop" }
+        check(cleanBackStack.size > 1) { "Only one item in the stack. Cannot pop" }
 
         val current = cleanBackStack.last()
         current.isClosing = true
-        return this.copy()
+        return this.copy(backStack = cleanBackStack)
     }
 
     fun popUpTo(pageType: String): NavStack {
@@ -232,9 +233,13 @@ internal data class NavStack(
         return copy(backStack = cleanBackStack.take(pageIndex) + cleanBackStack[pageIndex] + cleanBackStack.last().apply { isClosing = true })
     }
 
-    fun canGoBack(): Boolean = backStack.size > 1
+    fun canGoBack(): Boolean = cleanBackStack().size > 1
 
     fun toNavStackState(): NavStackState {
         return NavStackState(this.backStack.map { it.toBackStackEntry() })
+    }
+
+    private fun cleanBackStack(): List<MutableNavStackEntry> {
+        return backStack.takeWhile { !it.isClosing }
     }
 }

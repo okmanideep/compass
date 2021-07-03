@@ -80,7 +80,10 @@ data class WatchPage(val contentId: String): AppPage(
 @Composable
 fun App() {
     val navController = getNavController()
-    StackNavHost(navController = navController, startDestination = HomePage.toPage()) {
+    val initialStack = listOf(
+        HomePage.toPage(), DetailPage("Content Id 1").toPage()
+    )
+    StackNavHost(navController = navController, initialStack = initialStack) {
         page(PageType.HOME.key) {
             HomePageUI()
         }
