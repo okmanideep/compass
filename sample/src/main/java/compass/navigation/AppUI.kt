@@ -3,17 +3,15 @@ package compass.navigation
 import android.os.Parcelable
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material.Button
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.Text
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import compass.Page
-import compass.getNavController
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import compass.*
+import compass.common.PagesBuilder
 import compass.stack.StackNavHost
 import kotlinx.parcelize.Parcelize
 
@@ -26,11 +24,12 @@ sealed class AppPage(
     abstract fun args(): Parcelable?
 }
 
-enum class PageType(val key: String){
-    HOME("home"), DETAIL("detail"), WATCH("watch")
+enum class PageType(val key: String) {
+    HOME("home"), DETAIL("detail"), WATCH("watch"),
+    TAB_ONE("Tab1"), TAB_TWO("Tab2"), TAB_THREE("Tab3"), TAB_FOUR("Tab4")
 }
 
-object HomePage: AppPage(
+object HomePage : AppPage(
     pageType = PageType.HOME,
 ) {
     override fun toBreadCrumbLabel(): String {
@@ -43,7 +42,7 @@ object HomePage: AppPage(
 }
 
 @Parcelize
-data class DetailPage(val contentId: String): AppPage(
+data class DetailPage(val contentId: String) : AppPage(
     pageType = PageType.DETAIL
 ), Parcelable {
     companion object {
@@ -62,7 +61,7 @@ data class DetailPage(val contentId: String): AppPage(
 }
 
 @Parcelize
-data class WatchPage(val contentId: String): AppPage(
+data class WatchPage(val contentId: String) : AppPage(
     pageType = PageType.WATCH
 ), Parcelable {
     companion object {
@@ -100,27 +99,85 @@ fun App() {
 
 @Composable
 fun HomePageUI() {
-    Box(modifier = Modifier
-        .fillMaxSize()
-        .background(MaterialTheme.colors.background)
+
+    val bottomNavigationItems = listOf(
+        BottomNavigationScreens.Tab1,
+        BottomNavigationScreens.Tab2,
+        BottomNavigationScreens.Tab3,
+        BottomNavigationScreens.Tab4
+    )
+
+    val bottomNavController = getNavController()
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        bottomBar = {
+            XBottomNavBar(bottomNavController, bottomNavigationItems)
+        }
     ) {
-        Text(text = "HOME", modifier = Modifier.align(Alignment.Center))
+        BottomNavHost(
+            navController = bottomNavController,
+            startDestination = BottomNavigationScreens.Tab1.toPage()
+        ) {
+            page(PageType.TAB_ONE.key) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colors.background)
+                ) {
+                    Text(text = "Tab1", modifier = Modifier.align(Alignment.Center))
+                }
+            }
+
+            page(PageType.TAB_TWO.key) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colors.background)
+                ) {
+                    Text(text = "Tab2", modifier = Modifier.align(Alignment.Center))
+                }
+            }
+
+            page(PageType.TAB_THREE.key) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colors.background)
+                ) {
+                    Text(text = "Tab3", modifier = Modifier.align(Alignment.Center))
+                }
+            }
+
+            page(PageType.TAB_FOUR.key) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colors.background)
+                ) {
+                    Text(text = "Tab4", modifier = Modifier.align(Alignment.Center))
+                }
+            }
+        }
     }
 }
 
 @Composable
 fun DetailPageUI(page: DetailPage) {
-    Box(modifier = Modifier
-        .fillMaxSize()
-        .background(MaterialTheme.colors.background)
-    ){
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colors.background)
+    ) {
         val detailNavController = getNavController()
-        StackNavHost(navController = detailNavController
-            , startDestination = page.toPage()) {
+        StackNavHost(
+            navController = detailNavController, startDestination = page.toPage()
+        ) {
             page(PageType.DETAIL.key) {
-                Box(modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colors.background)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colors.background)
                 ) {
                     val detailPage = DetailPage.from(it)
                     Column(modifier = Modifier.align(Alignment.Center)) {
@@ -150,10 +207,50 @@ fun DetailPageUI(page: DetailPage) {
 
 @Composable
 fun WatchPageUI(page: WatchPage) {
-    Box(modifier = Modifier
-        .fillMaxSize()
-        .background(MaterialTheme.colors.background)
-    ){
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colors.background)
+    ) {
         Text(text = "WATCH - ${page.contentId}", modifier = Modifier.align(Alignment.Center))
     }
+}
+
+sealed class BottomNavigationScreens(val route: String) {
+    fun toPage() = Page(route)
+
+    object Tab1 : BottomNavigationScreens("Tab1")
+    object Tab2 : BottomNavigationScreens("Tab2")
+    object Tab3 : BottomNavigationScreens("Tab3")
+    object Tab4 : BottomNavigationScreens("Tab4")
+}
+
+@Composable
+private fun XBottomNavBar(
+    navController: NavController,
+    items: List<BottomNavigationScreens>
+) {
+    BottomNavigation(modifier = Modifier) {
+        val currentRoute = currentRoute(navController = navController)
+        items.forEach { screen ->
+            BottomNavigationItem(
+                label = { Text(screen.route) },
+                selected = currentRoute == screen.route,
+                alwaysShowLabel = true,
+                selectedContentColor = Color.White,
+                unselectedContentColor = Color.White.copy(0.4f),
+                icon = {},
+                onClick = {
+                    if (currentRoute != screen.route) {
+                        navController.navigateTo(screen.toPage(), false)
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun currentRoute(navController: NavController): String? {
+    return navController.state.backStack.lastOrNull { !it.isClosing }?.page?.type ?: ""
 }

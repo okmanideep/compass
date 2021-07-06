@@ -1,19 +1,15 @@
-package compass.stack
+package compass
 
+import android.util.Log
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.ExperimentalAnimationApi
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.*
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
-import compass.*
 import compass.common.BackStackEntryScope
 import compass.common.BackStackEntryScopeProvider
 import compass.common.Pages
@@ -21,12 +17,12 @@ import compass.common.PagesBuilder
 
 @ExperimentalAnimationApi
 @Composable
-fun StackNavHost(
+fun BottomNavHost(
     navController: NavController,
     startDestination: Page,
     modifier: Modifier = Modifier,
     builder: PagesBuilder.() -> Unit
-) = StackNavHost(
+) = BottomNavHost(
     navController = navController,
     initialStack = listOf(startDestination),
     modifier,
@@ -35,7 +31,7 @@ fun StackNavHost(
 
 @ExperimentalAnimationApi
 @Composable
-fun StackNavHost(
+fun BottomNavHost(
     navController: NavController,
     initialStack: List<Page>,
     modifier: Modifier = Modifier,
@@ -43,23 +39,23 @@ fun StackNavHost(
 ) {
     val pages = PagesBuilder().apply(builder).build()
     val viewModelStoreOwner = checkNotNull(LocalViewModelStoreOwner.current) {
-        "StackNavHost requires a ViewModelStoreOwner to be provided via LocalViewModelStoreOwner"
+        "BottomNavHost requires a ViewModelStoreOwner to be provided via LocalViewModelStoreOwner"
     }
 
-    val stackNavViewModel = remember(pages, navController, viewModelStoreOwner) {
-        stackNavViewModel(
-            pages = pages,
-            navController = navController,
-            viewModelStoreOwner = viewModelStoreOwner
-        )
+    val bottomNavViewModel = remember(pages, navController, viewModelStoreOwner) {
+        bottomNavViewModel(pages, navController, viewModelStoreOwner)
     }
 
-    DisposableEffect(stackNavViewModel, navController) {
+    // TODO: 06/07/21 -- On enabling this logic, bottom tab selection messes up ????
+//    bottomNavViewModel.setStateChangedListener {
+////        Log.e("BottomNavHost: ", it.debugLog())
+//    }
+
+    DisposableEffect(bottomNavViewModel, navController) {
         for (page in initialStack) {
-            stackNavViewModel.navigateTo(page, false)
+            bottomNavViewModel.navigateTo(page, false)
         }
-
-        navController.attachNavHostController(stackNavViewModel)
+        navController.attachNavHostController(bottomNavViewModel)
 
         onDispose {
             navController.detachNavHostController()
@@ -69,16 +65,16 @@ fun StackNavHost(
     val activeEntries = navController.state.activeEntries()
     val canGoBack = navController.canGoBack
 
-    BackHandler(enabled = canGoBack, onBack = { stackNavViewModel.goBack() })
+    BackHandler(enabled = canGoBack, onBack = { bottomNavViewModel.goBack() })
 
     Box(modifier = modifier) {
         for (entry in activeEntries) {
             BackStackEntryScopeProvider(
-                backStackEntryScope = stackNavViewModel.scopeForEntryId(entry.id)
+                backStackEntryScope = bottomNavViewModel.scopeForEntryId(entry.id)
             ) {
                 AnimatedVisibility(
                     visible = !entry.isClosing,
-                    enter = slideInHorizontally({ it }),
+                    enter = fadeIn(),
                     exit = fadeOut()
                 ) {
                     val pageContentComposable = pages.pageContentByType[entry.page.type]!!
@@ -89,22 +85,23 @@ fun StackNavHost(
     }
 }
 
-private fun stackNavViewModel(
+private fun bottomNavViewModel(
     pages: Pages,
     navController: NavController,
     viewModelStoreOwner: ViewModelStoreOwner
-): StackNavViewModel {
+): BottomNavViewModel {
     val factory = object : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel?> create(modelClass: Class<T>): T {
-            return StackNavViewModel(pages, navController) as T
+            return BottomNavViewModel(pages, navController) as T
         }
     }
 
-    return ViewModelProvider(viewModelStoreOwner, factory).get(StackNavViewModel::class.java)
+    return ViewModelProvider(viewModelStoreOwner, factory).get(BottomNavViewModel::class.java)
 }
 
-internal class StackNavViewModel(
+
+internal class BottomNavViewModel(
     private val pages: Pages,
     private val navController: NavController
 ) : ViewModel(), NavHostController {
@@ -124,7 +121,7 @@ internal class StackNavViewModel(
     }
 
     override fun navigateTo(page: Page, popUpTo: Boolean) {
-        navStack = if (popUpTo) navStack.addOrPopUpTo(page) else navStack.add(page)
+        navStack = if (popUpTo) navStack.addOrPopUpTo(page) else navStack.addOrBringForward(page)
 
         onStateUpdated()
     }
@@ -165,22 +162,19 @@ internal class StackNavViewModel(
     }
 
     /**
-     * clean the scopes for items which are removed from stack
-     * but present in @param [scopeByEntryId]
+     * Intentionally left bank
+     * this method makes no sense for Bottom Navigation
+     * as VMs of the Pages loaded directly from BottomNav should persist
+     * even when they are removed from the stack
      * */
     private fun cleanScopes() {
-        val list = mutableListOf<String>()
-        for (mutableEntry in scopeByEntryId) {
-            if (navStack.contains(mutableEntry.key))
-                list.add(mutableEntry.key)
-        }
-
-        for (id in list) {
-            val scope = scopeByEntryId.remove(id)
-            scope?.viewModelStore?.clear()
-        }
+        // do nothing for BottomNavHost
     }
 
+    /**
+     * this method is called when Page holding the BottomNav is popped
+     * hence clear all values to avoid memory leaks
+     * */
     override fun onCleared() {
         scopeByEntryId.values.forEach {
             it.viewModelStore.clear()
@@ -189,4 +183,5 @@ internal class StackNavViewModel(
         super.onCleared()
     }
 }
+
 

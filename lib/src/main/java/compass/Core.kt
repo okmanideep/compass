@@ -132,6 +132,15 @@ data class NavStackState(
         return backStack
             .filterIndexed { index, _ -> index == topIndex || index == bottomIndex }
     }
+
+    fun debugLog(): String {
+        var stack = ""
+        backStack.forEach {
+            stack = stack.plus(it.page.type).plus(" -> ")
+        }
+
+        return stack
+    }
 }
 
 inline fun <T> List<T>.takeUntil(predicate: (T) -> Boolean): List<T> {
@@ -201,6 +210,19 @@ internal data class NavStack(
                 .apply { isClosing = true })
     }
 
+    fun addOrBringForward(page: Page): NavStack {
+        val cleanBackStack = backStack.takeWhile { !it.isClosing }
+
+        val pageIndex = cleanBackStack.indexOfFirst { it.page.type == page.type }
+        if (pageIndex < 0 || pageIndex == cleanBackStack.size - 1) return add(page)
+
+        val existingPage = cleanBackStack[pageIndex]
+        return copy(
+            backStack = cleanBackStack.take(pageIndex) + existingPage + cleanBackStack.last()
+                .apply { isClosing = true }
+        )
+    }
+
     fun canGoBack(): Boolean = cleanBackStack().size > 1
 
     fun toNavStackState(): NavStackState {
@@ -209,5 +231,13 @@ internal data class NavStack(
 
     private fun cleanBackStack(): List<MutableNavStackEntry> {
         return backStack.takeWhile { !it.isClosing }
+    }
+
+    fun contains(id: String): Boolean {
+        backStack.forEach { entry ->
+            if (entry.id == id)
+                return true
+        }
+        return false
     }
 }
