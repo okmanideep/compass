@@ -1,5 +1,6 @@
 package compass.stack
 
+import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
@@ -134,12 +135,13 @@ internal class StackNavViewModel(
     }
 
     override fun goBack(): Boolean {
+        Log.e("GoBackStackNav: ", "Before Back ${navStack.debugLog()} canGoBack[${navStack.canGoBack()}]")
         val canGoBack = navStack.canGoBack()
         if (canGoBack) {
             navStack = navStack.pop()
             onStateUpdated()
         }
-
+        Log.e("GoBackStackNav: ", "After Back ${navStack.debugLog()} canGoBack[${navStack.canGoBack()}]")
         return canGoBack
     }
 
@@ -171,7 +173,7 @@ internal class StackNavViewModel(
     private fun cleanScopes() {
         val list = mutableListOf<String>()
         for (mutableEntry in scopeByEntryId) {
-            if (navStack.contains(mutableEntry.key))
+            if (!navStack.contains(mutableEntry.key))
                 list.add(mutableEntry.key)
         }
 
@@ -185,6 +187,7 @@ internal class StackNavViewModel(
         scopeByEntryId.values.forEach {
             it.viewModelStore.clear()
         }
+        scopeByEntryId.clear()
 
         super.onCleared()
     }

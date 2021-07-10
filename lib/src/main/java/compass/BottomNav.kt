@@ -131,12 +131,13 @@ internal class BottomNavViewModel(
     }
 
     override fun goBack(): Boolean {
+        Log.e("GoBackBottomNav: ", "Before Back ${navStack.debugLog()} canGoBack[${navStack.canGoBack()}]")
         val canGoBack = navStack.canGoBack()
         if (canGoBack) {
             navStack = navStack.pop()
             onStateUpdated()
         }
-
+        Log.e("GoBackBottomNav: ", "After Back ${navStack.debugLog()} canGoBack[${navStack.canGoBack()}]")
         return canGoBack
     }
 

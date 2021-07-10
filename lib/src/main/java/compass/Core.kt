@@ -240,4 +240,12 @@ internal data class NavStack(
         }
         return false
     }
+
+    fun debugLog(): String {
+        var log = ""
+        backStack.forEach {
+            entry -> log = log.plus(" -> ${entry.page.type} [${entry.isClosing}]")
+        }
+        return log
+    }
 }

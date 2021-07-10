@@ -3,15 +3,16 @@ package compass.navigation
 import android.os.Parcelable
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import compass.*
-import compass.common.PagesBuilder
 import compass.stack.StackNavHost
 import kotlinx.parcelize.Parcelize
 
@@ -92,7 +93,7 @@ fun App() {
         }
 
         page(PageType.DETAIL.key) {
-            DetailPageUI(DetailPage.from(it))
+            DetailPageUI(Modifier, DetailPage.from(it))
         }
     }
 }
@@ -114,25 +115,41 @@ fun HomePageUI() {
         bottomBar = {
             XBottomNavBar(bottomNavController, bottomNavigationItems)
         }
-    ) {
+    ) { innerPadding ->
         BottomNavHost(
             navController = bottomNavController,
             startDestination = BottomNavigationScreens.Tab1.toPage()
         ) {
             page(PageType.TAB_ONE.key) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colors.background)
+
+                val detailNavController = getNavController()
+                StackNavHost(
+                    navController = detailNavController,
+                    startDestination = BottomNavigationScreens.Tab1.toPage()
                 ) {
-                    Text(text = "Tab1", modifier = Modifier.align(Alignment.Center))
+                    page(PageType.TAB_ONE.key) {
+                        TabOneUI(Modifier.padding(innerPadding))
+                    }
+
+                    page(PageType.DETAIL.key) {
+                        DetailPageUI(Modifier.padding(innerPadding), DetailPage.from(it))
+                    }
                 }
             }
+
+
+            /**
+             * adding page here means telling BottomNav what all pages can be navigated by it
+             * */
+//            page(PageType.DETAIL.key) {
+//                DetailPageUI(DetailPage.from(it))
+//            }
 
             page(PageType.TAB_TWO.key) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        .padding(innerPadding)
                         .background(MaterialTheme.colors.background)
                 ) {
                     Text(text = "Tab2", modifier = Modifier.align(Alignment.Center))
@@ -143,6 +160,7 @@ fun HomePageUI() {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        .padding(innerPadding)
                         .background(MaterialTheme.colors.background)
                 ) {
                     Text(text = "Tab3", modifier = Modifier.align(Alignment.Center))
@@ -153,6 +171,7 @@ fun HomePageUI() {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        .padding(innerPadding)
                         .background(MaterialTheme.colors.background)
                 ) {
                     Text(text = "Tab4", modifier = Modifier.align(Alignment.Center))
@@ -162,11 +181,36 @@ fun HomePageUI() {
     }
 }
 
+
+// TODO: 08/07/21 Why Align.Centre not accessible when extracted out as a method???
 @Composable
-fun DetailPageUI(page: DetailPage) {
-    Box(
-        modifier = Modifier
+private fun TabOneUI(modifier: Modifier) {
+    val navController = getNavController()
+    Column(
+        modifier = modifier
             .fillMaxSize()
+            .border(5.dp, Color.Red, RoundedCornerShape(5.dp))
+    ) {
+        Text(
+            text = "Tab1", modifier = Modifier
+                .padding(10.dp)
+                .align(Alignment.CenterHorizontally)
+        )
+        Spacer(modifier = Modifier.height(15.dp))
+        Button(onClick = {
+            navController.navigateTo(DetailPage("27").toPage(), false)
+        }, modifier = Modifier.padding(10.dp)) {
+            Text(text = "Click to goto DETAILS Page")
+        }
+    }
+}
+
+@Composable
+fun DetailPageUI(modifier: Modifier, page: DetailPage) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .border(5.dp, Color.Blue)
             .background(MaterialTheme.colors.background)
     ) {
         val detailNavController = getNavController()
