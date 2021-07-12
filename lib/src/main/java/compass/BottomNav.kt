@@ -52,9 +52,10 @@ fun BottomNavHost(
 //    }
 
     DisposableEffect(bottomNavViewModel, navController) {
-        for (page in initialStack) {
-            bottomNavViewModel.navigateTo(page, false)
-        }
+//        for (page in initialStack) {
+//            bottomNavViewModel.navigateTo(page, false)
+//        }
+        bottomNavViewModel.setInitialStack(initialStack, false)
         navController.attachNavHostController(bottomNavViewModel)
 
         onDispose {
@@ -182,6 +183,15 @@ internal class BottomNavViewModel(
         }
 
         super.onCleared()
+    }
+
+    fun setInitialStack(initialStack: List<Page>, forceUpdate: Boolean) {
+        if (forceUpdate || !navStack.isSameInitialStack(initialStack)) {
+            navStack.clearBackStack()
+            initialStack.forEach {
+                    page -> navigateTo(page = page, false)
+            }
+        }
     }
 }
 

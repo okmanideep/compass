@@ -48,6 +48,7 @@ class NavController(private val navContext: NavContext) {
         navHostController.setStateChangedListener { state ->
             this.state = state
             this.canGoBack = navHostController.canGoBack()
+            Log.e("StateUpdated: $navHostController", state.debugLog())
         }
     }
 
@@ -134,12 +135,11 @@ data class NavStackState(
     }
 
     fun debugLog(): String {
-        var stack = ""
+        var log = ""
         backStack.forEach {
-            stack = stack.plus(it.page.type).plus(" -> ")
+                entry -> log = log.plus(" -> ${entry.page.type} [${entry.isClosing}]")
         }
-
-        return stack
+        return log
     }
 }
 
@@ -247,5 +247,20 @@ internal data class NavStack(
             entry -> log = log.plus(" -> ${entry.page.type} [${entry.isClosing}]")
         }
         return log
+    }
+
+    fun clearBackStack(): NavStack {
+        return copy(backStack = emptyList())
+    }
+
+    fun isSameInitialStack(initialStack: List<Page>): Boolean {
+        if (backStack.isEmpty())
+            return false
+        initialStack.forEachIndexed { index, page ->
+            if (backStack.size > index && backStack[index].page != page)
+                return false
+        }
+
+        return true
     }
 }

@@ -56,9 +56,10 @@ fun StackNavHost(
     }
 
     DisposableEffect(stackNavViewModel, navController) {
-        for (page in initialStack) {
-            stackNavViewModel.navigateTo(page, false)
-        }
+//        for (page in initialStack) {
+//            stackNavViewModel.navigateTo(page, false)
+//        }
+        stackNavViewModel.setInitialStack(initialStack, false)
 
         navController.attachNavHostController(stackNavViewModel)
 
@@ -190,6 +191,16 @@ internal class StackNavViewModel(
         scopeByEntryId.clear()
 
         super.onCleared()
+    }
+
+    fun setInitialStack(initialStack: List<Page>, forceUpdate: Boolean) {
+        if (forceUpdate || !navStack.isSameInitialStack(initialStack)) {
+            navStack.clearBackStack()
+            cleanScopes()
+            initialStack.forEach {
+                page -> navigateTo(page = page, false)
+            }
+        }
     }
 }
 
