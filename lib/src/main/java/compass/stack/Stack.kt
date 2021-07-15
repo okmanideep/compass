@@ -110,7 +110,7 @@ internal class StackNavViewModel(
     private val pages: Pages,
     private val navController: NavController
 ) : ViewModel(), NavHostController {
-    private var navStack = NavStack(emptyList())
+    private var navStack = NavStack()
     private var listener: ((NavStackState) -> Unit)? = null
     private val scopeByEntryId = mutableMapOf<String, BackStackEntryScope>()
     var canGoBack by mutableStateOf(false)
@@ -125,24 +125,23 @@ internal class StackNavViewModel(
         return pages.hasPageType(page)
     }
 
-    override fun navigateTo(page: Page, popUpTo: Boolean) {
-        navStack = if (popUpTo) navStack.addOrPopUpTo(page) else navStack.add(page)
-
+    override fun navigateTo(navEntry: NavEntry, popUpTo: Boolean) {
+        if (popUpTo) navStack.addOrPopUpTo(navEntry) else navStack.add(navEntry)
         onStateUpdated()
     }
 
     override fun canGoBack(): Boolean {
-        return navStack.canGoBack()
+        return navStack.canPop()
     }
 
     override fun goBack(): Boolean {
-        Log.e("GoBackStackNav: ", "Before Back ${navStack.debugLog()} canGoBack[${navStack.canGoBack()}]")
-        val canGoBack = navStack.canGoBack()
+        Log.e("GoBackStackNav: ", "Before Back ${navStack.debugLog()} canGoBack[${navStack.canPop()}]")
+        val canGoBack = navStack.canPop()
         if (canGoBack) {
-            navStack = navStack.pop()
+            navStack.pop()
             onStateUpdated()
         }
-        Log.e("GoBackStackNav: ", "After Back ${navStack.debugLog()} canGoBack[${navStack.canGoBack()}]")
+        Log.e("GoBackStackNav: ", "After Back ${navStack.debugLog()} canGoBack[${navStack.canPop()}]")
         return canGoBack
     }
 
@@ -163,7 +162,7 @@ internal class StackNavViewModel(
     }
 
     private fun onStateUpdated() {
-        canGoBack = navStack.canGoBack()
+        canGoBack = navStack.canPop()
         listener?.invoke(navStack.toNavStackState())
     }
 
@@ -198,7 +197,7 @@ internal class StackNavViewModel(
             navStack.clearBackStack()
             cleanScopes()
             initialStack.forEach {
-                page -> navigateTo(page = page, false)
+                page -> navigateTo(NavEntry(page = page, navContext = navController.navContext), false)
             }
         }
     }

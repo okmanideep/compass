@@ -198,7 +198,8 @@ private fun TabOneUI(modifier: Modifier) {
         )
         Spacer(modifier = Modifier.height(15.dp))
         Button(onClick = {
-            navController.navigateTo(DetailPage("27").toPage(), false)
+            val navEntry = NavEntry(page = DetailPage("27").toPage(), navContext = navController.navContext)
+            navController.navigateTo(navEntry, false)
         }, modifier = Modifier.padding(10.dp)) {
             Text(text = "Click to goto DETAILS Page")
         }
@@ -230,10 +231,11 @@ fun DetailPageUI(modifier: Modifier, page: DetailPage) {
                         )
 
                         Button(onClick = {
-                            detailNavController.navigateTo(
-                                WatchPage(detailPage.contentId).toPage(),
-                                false
+                            val navEntry = NavEntry(
+                                page = WatchPage(detailPage.contentId).toPage(),
+                                navContext = detailNavController.navContext
                             )
+                            detailNavController.navigateTo(navEntry, false)
                         }) {
                             Text("WATCH")
                         }
@@ -286,7 +288,12 @@ private fun XBottomNavBar(
                 icon = {},
                 onClick = {
                     if (currentRoute != screen.route) {
-                        navController.navigateTo(screen.toPage(), false)
+                        navController.navigateTo(
+                            NavEntry(
+                                page = screen.toPage(),
+                                navContext = navController.navContext
+                            ), false
+                        )
                     }
                 }
             )

@@ -106,7 +106,7 @@ internal class BottomNavViewModel(
     private val pages: Pages,
     private val navController: NavController
 ) : ViewModel(), NavHostController {
-    private var navStack = NavStack(emptyList())
+    private var navStack = NavStack()
     private var listener: ((NavStackState) -> Unit)? = null
     private val scopeByEntryId = mutableMapOf<String, BackStackEntryScope>()
     var canGoBack by mutableStateOf(false)
@@ -121,24 +121,23 @@ internal class BottomNavViewModel(
         return pages.hasPageType(page)
     }
 
-    override fun navigateTo(page: Page, popUpTo: Boolean) {
-        navStack = if (popUpTo) navStack.addOrPopUpTo(page) else navStack.addOrBringForward(page)
-
+    override fun navigateTo(navEntry: NavEntry, popUpTo: Boolean) {
+        navStack.addOrBringForward(navEntry = navEntry)
         onStateUpdated()
     }
 
     override fun canGoBack(): Boolean {
-        return navStack.canGoBack()
+        return navStack.canPop()
     }
 
     override fun goBack(): Boolean {
-        Log.e("GoBackBottomNav: ", "Before Back ${navStack.debugLog()} canGoBack[${navStack.canGoBack()}]")
-        val canGoBack = navStack.canGoBack()
+        Log.e("GoBackBottomNav: ", "Before Back ${navStack.debugLog()} canGoBack[${navStack.canPop()}]")
+        val canGoBack = navStack.canPop()
         if (canGoBack) {
-            navStack = navStack.pop()
+            navStack.pop()
             onStateUpdated()
         }
-        Log.e("GoBackBottomNav: ", "After Back ${navStack.debugLog()} canGoBack[${navStack.canGoBack()}]")
+        Log.e("GoBackBottomNav: ", "After Back ${navStack.debugLog()} canGoBack[${navStack.canPop()}]")
         return canGoBack
     }
 
@@ -159,7 +158,7 @@ internal class BottomNavViewModel(
     }
 
     private fun onStateUpdated() {
-        canGoBack = navStack.canGoBack()
+        canGoBack = navStack.canPop()
         listener?.invoke(navStack.toNavStackState())
     }
 
@@ -189,7 +188,7 @@ internal class BottomNavViewModel(
         if (forceUpdate || !navStack.isSameInitialStack(initialStack)) {
             navStack.clearBackStack()
             initialStack.forEach {
-                    page -> navigateTo(page = page, false)
+                    page -> navigateTo(NavEntry(page = page, navContext = navController.navContext), false)
             }
         }
     }
