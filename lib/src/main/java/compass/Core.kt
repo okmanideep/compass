@@ -6,6 +6,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.*
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import compass.common.firstIndex
 import kotlinx.parcelize.Parcelize
 import java.util.*
 import kotlin.collections.ArrayList
@@ -36,7 +37,7 @@ fun getNavController(): NavController {
 
 class NavController(val navContext: NavContext) {
     private var hostController: NavHostController? = null
-    var state by mutableStateOf(NavStackState())
+    var state by mutableStateOf<NavState?>(null)
         private set
     var canGoBack by mutableStateOf(false)
         private set
@@ -76,7 +77,7 @@ class NavController(val navContext: NavContext) {
 }
 
 interface NavHostController {
-    fun setStateChangedListener(listener: (NavStackState) -> Unit)
+    fun setStateChangedListener(listener: (NavState) -> Unit)
     fun canNavigateTo(page: Page): Boolean
     fun navigateTo(navEntry: NavEntry, popUpTo: Boolean = false)
     fun canGoBack(): Boolean
@@ -98,21 +99,26 @@ class NavEntry(
 ) : LifecycleOwner, ViewModelStoreOwner {
     private val lifecycleRegistry = LifecycleRegistry(this)
 
-    var isClosing: Boolean = false
-        private set(value) {
-            !lifecycleRegistry.currentState.isAtLeast(Lifecycle.State.RESUMED)
-            field = value
-        }
+//    var isClosing: Boolean = !lifecycleRegistry.currentState.isAtLeast(Lifecycle.State.RESUMED)
 
     override fun getLifecycle(): Lifecycle {
         return lifecycleRegistry
     }
+
     fun setLifecycleState(state: Lifecycle.State) {
         lifecycleRegistry.currentState = state
     }
 
     override fun getViewModelStore(): ViewModelStore {
         return viewModelStore
+    }
+
+    fun isClosing(): Boolean {
+        return !lifecycleRegistry.currentState.isAtLeast(Lifecycle.State.CREATED)
+    }
+
+    fun isResumed(): Boolean {
+        return lifecycleRegistry.currentState == Lifecycle.State.RESUMED
     }
 }
 
@@ -127,19 +133,24 @@ fun NavEntry.LocalOwnersProvider(content: @Composable () -> Unit) {
     }
 }
 
-data class NavStackState(
-    val backStack: List<NavEntry> = emptyList()
-) {
+interface NavState {
+    val backStack: List<NavEntry>
+    fun activeEntries(): List<NavEntry>
+}
+
+internal class StackNavState(
+    override val backStack: List<NavEntry> = emptyList()
+) : NavState{
     /**
      * Active entry and the entry which is probably exiting or present below the
      * active entry which is animating in
      *
      * All the entries which are supposed to be drawn on the screen fully / partially
      */
-    fun activeEntries(): List<NavEntry> {
+    override fun activeEntries(): List<NavEntry> {
         if (backStack.isEmpty()) return emptyList()
 
-        val activeEntryIndex = backStack.indexOfLast { !it.isClosing }
+        val activeEntryIndex = backStack.indexOfLast { !it.isClosing() }
 
         val topIndex = if (activeEntryIndex + 1 == backStack.size) { // active item at top
             activeEntryIndex
@@ -156,14 +167,27 @@ data class NavStackState(
         return backStack
             .filterIndexed { index, _ -> index == topIndex || index == bottomIndex }
     }
+}
 
-    fun debugLog(): String {
-        var log = ""
-        backStack.forEach {
-                entry -> log = log.plus(" -> ${entry.page.type} [${entry.isClosing}]")
-        }
-        return log
+internal class BottomNavState(
+    override val backStack: List<NavEntry> = emptyList()
+): NavState {
+    override fun activeEntries(): List<NavEntry> {
+        if (backStack.isEmpty()) return emptyList()
+
+        val topIndex = backStack.indexOfLast { it.lifecycle.currentState == Lifecycle.State.RESUMED }
+        val bottomIndex = topIndex - 1
+
+        return backStack.filterIndexed { index, _ -> index == topIndex || index == bottomIndex }
     }
+}
+
+fun NavState.debugLog(): String {
+    var log = ""
+    backStack.forEach {
+            entry -> log = log.plus(" -> ${entry.page.type} [${entry.isClosing()}]")
+    }
+    return log
 }
 
 inline fun <T> List<T>.takeUntil(predicate: (T) -> Boolean): List<T> {
@@ -203,7 +227,7 @@ internal class NavStack() {
     }
 
     fun canPop(): Boolean {
-        return currentEntryIndex > 1
+        return currentEntryIndex > 0
     }
 
     fun pop() {
@@ -253,13 +277,9 @@ internal class NavStack() {
         }
     }
 
-    fun toNavStackState(): NavStackState {
-        return NavStackState(this.entries.map { it })
+    fun toNavStackState(): NavState {
+        return StackNavState(this.entries.map { it })
     }
-//
-//    private fun cleanBackStack(): List<MutableNavEntry> {
-//        return backStack.takeWhile { !it.isClosing }
-//    }
 
     fun addOrBringForward(navEntry: NavEntry) {
         val pageIndex = entries.indexOfFirst { it.page.type == navEntry.page.type }
@@ -273,7 +293,7 @@ internal class NavStack() {
     }
 
     fun addOrPopUpTo(navEntry: NavEntry) {
-        IllegalStateException("addOrPopUpTo() Not Implemented Yet")
+        throw IllegalStateException("addOrPopUpTo() Not Implemented Yet")
     }
 
     fun contains(id: String): Boolean {
@@ -287,13 +307,15 @@ internal class NavStack() {
     fun debugLog(): String {
         var log = ""
         entries.forEach {
-            entry -> log = log.plus(" -> ${entry.page.type} [${entry.isClosing}]")
+            entry -> log = log.plus(" -> ${entry.page.type} [${entry.isClosing()}]")
         }
         return log
     }
 
     fun clearBackStack() {
-        return entries.clear()
+        currentEntryIndex = -1
+        updateEntries()
+        removeClosedEntries()
     }
 
     fun isSameInitialStack(initialStack: List<Page>): Boolean {
@@ -307,15 +329,106 @@ internal class NavStack() {
     }
 }
 
-/**
- * Returns the first element matching the given [predicate].
- * @throws [NoSuchElementException] if no such element is found.
- */
-inline fun <T> Iterable<T>.firstIndex(predicate: (T) -> Boolean): Int {
-    for ((i, element) in this.withIndex()) {
-        if (predicate(element)) {
-            return i
+internal class BottomNavStack {
+    private var headIndex = 0
+    private var tailIndex = -1
+    private val entries = LinkedList<NavEntry>()
+    private var hostLifecycleState: Lifecycle.State = Lifecycle.State.RESUMED
+
+    fun updateHostLifecycleState(state: Lifecycle.State) {
+        hostLifecycleState = state
+    }
+
+    fun add(entry: NavEntry) {
+        entries.addLast(entry)
+        tailIndex = entries.size - 1
+        updateEntries()
+    }
+
+    fun canGoBack(): Boolean {
+        return tailIndex > headIndex
+    }
+
+    fun goBackWithPersist() {
+        check(tailIndex > headIndex) { "${tailIndex + 1} items in the stack. Can't pop" }
+        tailIndex -= 1
+        updateEntries()
+    }
+
+    private fun capToHostLifecycle(state: Lifecycle.State): Lifecycle.State {
+        return if (state.ordinal > hostLifecycleState.ordinal) {
+            hostLifecycleState
+        } else {
+            state
         }
     }
-    return -1
+
+    fun toNavStackState(): NavState {
+        return BottomNavState(this.entries.map { it })
+    }
+
+    fun addOrBringForward(navEntry: NavEntry) {
+        val existingPageIndex = entries.firstIndex { it.page.type == navEntry.page.type }
+        if (existingPageIndex < 0) {
+            add(navEntry)
+            return
+        }
+
+        tailIndex = existingPageIndex
+        updateEntries()
+    }
+
+    fun addOrPopUpTo(navEntry: NavEntry) {
+        throw IllegalStateException("addOrPopUpTo() Not Implemented Yet")
+    }
+
+    private fun updateEntries() {
+        for (i in 0 until entries.size) {
+            when (i) {
+                in (headIndex) until tailIndex -> {
+                    entries[i].setLifecycleState(capToHostLifecycle(Lifecycle.State.STARTED))
+                }
+                tailIndex -> {
+                    entries[i].setLifecycleState(capToHostLifecycle(Lifecycle.State.RESUMED))
+                }
+                else -> { // persisted entries
+                    entries[i].setLifecycleState(Lifecycle.State.CREATED)
+                }
+            }
+        }
+    }
+
+    fun contains(id: String): Boolean {
+        entries.forEach { entry ->
+            if (entry.id == id)
+                return true
+        }
+        return false
+    }
+
+    fun debugLog(): String {
+        var log = ""
+        entries.forEach {
+                entry -> log = log.plus(" -> ${entry.page.type} [${entry.isClosing()}]")
+        }
+        return log
+    }
+
+    /**
+     * entries for Bottom Nav must never be cleared
+     * */
+    fun clearBackStack() {
+
+    }
+
+    fun isSameInitialStack(initialStack: List<Page>): Boolean {
+        if (entries.isEmpty())
+            return false
+        initialStack.forEachIndexed { index, page ->
+            if (entries.size > index && entries[index].page != page)
+                return false
+        }
+        return true
+    }
+
 }

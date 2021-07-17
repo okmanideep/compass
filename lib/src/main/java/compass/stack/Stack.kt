@@ -11,7 +11,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import compass.*
@@ -68,7 +67,7 @@ fun StackNavHost(
         }
     }
 
-    val activeEntries = navController.state.activeEntries()
+    val activeEntries = navController.state?.activeEntries() ?: emptyList()
     val canGoBack = navController.canGoBack
 
     BackHandler(enabled = canGoBack, onBack = { stackNavViewModel.goBack() })
@@ -79,7 +78,7 @@ fun StackNavHost(
                 backStackEntryScope = stackNavViewModel.scopeForEntryId(entry.id)
             ) {
                 AnimatedVisibility(
-                    visible = !entry.isClosing,
+                    visible = !entry.isClosing(),
                     enter = slideInHorizontally({ it }),
                     exit = fadeOut()
                 ) {
@@ -111,12 +110,12 @@ internal class StackNavViewModel(
     private val navController: NavController
 ) : ViewModel(), NavHostController {
     private var navStack = NavStack()
-    private var listener: ((NavStackState) -> Unit)? = null
+    private var listener: ((NavState) -> Unit)? = null
     private val scopeByEntryId = mutableMapOf<String, BackStackEntryScope>()
     var canGoBack by mutableStateOf(false)
         private set
 
-    override fun setStateChangedListener(listener: (NavStackState) -> Unit) {
+    override fun setStateChangedListener(listener: (NavState) -> Unit) {
         this.listener = listener
         onStateUpdated()
     }

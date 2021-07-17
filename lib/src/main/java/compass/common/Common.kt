@@ -9,6 +9,7 @@ import compass.LocalNavContext
 import compass.NavContext
 import compass.NavController
 import compass.Page
+import java.util.NoSuchElementException
 
 internal class BackStackEntryScope(private val baseController: NavController) : NavContext,
     ViewModelStoreOwner {
@@ -62,4 +63,17 @@ class PagesBuilder(
     }
 
     internal fun build() = Pages(pageContentByType)
+}
+
+/**
+ * Returns the first element matching the given [predicate].
+ * @throws [NoSuchElementException] if no such element is found.
+ */
+inline fun <T> Iterable<T>.firstIndex(predicate: (T) -> Boolean): Int {
+    for ((i, element) in this.withIndex()) {
+        if (predicate(element)) {
+            return i
+        }
+    }
+    return -1
 }

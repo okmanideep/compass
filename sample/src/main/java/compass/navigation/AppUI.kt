@@ -303,5 +303,5 @@ private fun XBottomNavBar(
 
 @Composable
 private fun currentRoute(navController: NavController): String? {
-    return navController.state.backStack.lastOrNull { !it.isClosing }?.page?.type ?: ""
+    return navController.state?.backStack?.lastOrNull { it.isResumed() }?.page?.type ?: ""
 }

@@ -6,6 +6,7 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStoreOwner
@@ -63,7 +64,7 @@ fun BottomNavHost(
         }
     }
 
-    val activeEntries = navController.state.activeEntries()
+    val activeEntries = navController.state?.activeEntries() ?: emptyList()
     val canGoBack = navController.canGoBack
 
     BackHandler(enabled = canGoBack, onBack = { bottomNavViewModel.goBack() })
@@ -74,7 +75,7 @@ fun BottomNavHost(
                 backStackEntryScope = bottomNavViewModel.scopeForEntryId(entry.id)
             ) {
                 AnimatedVisibility(
-                    visible = !entry.isClosing,
+                    visible = entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED),
                     enter = fadeIn(),
                     exit = fadeOut()
                 ) {
@@ -106,13 +107,13 @@ internal class BottomNavViewModel(
     private val pages: Pages,
     private val navController: NavController
 ) : ViewModel(), NavHostController {
-    private var navStack = NavStack()
-    private var listener: ((NavStackState) -> Unit)? = null
+    private var navStack = BottomNavStack()
+    private var listener: ((NavState) -> Unit)? = null
     private val scopeByEntryId = mutableMapOf<String, BackStackEntryScope>()
     var canGoBack by mutableStateOf(false)
         private set
 
-    override fun setStateChangedListener(listener: (NavStackState) -> Unit) {
+    override fun setStateChangedListener(listener: (NavState) -> Unit) {
         this.listener = listener
         onStateUpdated()
     }
@@ -127,17 +128,17 @@ internal class BottomNavViewModel(
     }
 
     override fun canGoBack(): Boolean {
-        return navStack.canPop()
+        return navStack.canGoBack()
     }
 
     override fun goBack(): Boolean {
-        Log.e("GoBackBottomNav: ", "Before Back ${navStack.debugLog()} canGoBack[${navStack.canPop()}]")
-        val canGoBack = navStack.canPop()
+        Log.e("GoBackBottomNav: ", "Before Back ${navStack.debugLog()} canGoBack[${navStack.canGoBack()}]")
+        val canGoBack = navStack.canGoBack()
         if (canGoBack) {
-            navStack.pop()
+            navStack.goBackWithPersist()
             onStateUpdated()
         }
-        Log.e("GoBackBottomNav: ", "After Back ${navStack.debugLog()} canGoBack[${navStack.canPop()}]")
+        Log.e("GoBackBottomNav: ", "After Back ${navStack.debugLog()} canGoBack[${navStack.canGoBack()}]")
         return canGoBack
     }
 
@@ -158,7 +159,7 @@ internal class BottomNavViewModel(
     }
 
     private fun onStateUpdated() {
-        canGoBack = navStack.canPop()
+        canGoBack = navStack.canGoBack()
         listener?.invoke(navStack.toNavStackState())
     }
 
