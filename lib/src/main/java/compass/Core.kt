@@ -90,16 +90,21 @@ interface NavContext {
 }
 
 val LocalNavContext = compositionLocalOf<NavContext?> { null }
+val LocalParentViewModelStoreOwner = compositionLocalOf<ViewModelStoreOwner?> { null }
 
 class NavEntry(
     val id: String = UUID.randomUUID().toString(),
     val page: Page,
-    val navContext: NavContext,
+    private val baseNavController: NavController,
     private val viewModelStore: ViewModelStore = ViewModelStore()
-) : LifecycleOwner, ViewModelStoreOwner {
+) : LifecycleOwner, ViewModelStoreOwner, NavContext {
     private val lifecycleRegistry = LifecycleRegistry(this)
 
 //    var isClosing: Boolean = !lifecycleRegistry.currentState.isAtLeast(Lifecycle.State.RESUMED)
+
+    private val controller by lazy {
+        NavController(this)
+    }
 
     override fun getLifecycle(): Lifecycle {
         return lifecycleRegistry
@@ -120,14 +125,23 @@ class NavEntry(
     fun isResumed(): Boolean {
         return lifecycleRegistry.currentState == Lifecycle.State.RESUMED
     }
+
+    override fun owner(): NavController {
+        return baseNavController
+    }
+
+    override fun controller(): NavController {
+        return controller
+    }
 }
 
 @Composable
-fun NavEntry.LocalOwnersProvider(content: @Composable () -> Unit) {
+fun NavEntry.LocalOwnersProvider(parentViewModelStoreOwner: ViewModelStoreOwner, content: @Composable () -> Unit) {
     CompositionLocalProvider(
-        LocalNavContext provides navContext,
+        LocalNavContext provides this,
         LocalViewModelStoreOwner provides this,
         LocalLifecycleOwner provides this,
+        LocalParentViewModelStoreOwner provides parentViewModelStoreOwner
     ) {
         content()
     }
@@ -201,7 +215,7 @@ inline fun <T> List<T>.takeUntil(predicate: (T) -> Boolean): List<T> {
     return list
 }
 
-internal class NavStack() {
+internal class NavStack {
 
     private var currentEntryIndex = -1
     private val entries = LinkedList<NavEntry>()

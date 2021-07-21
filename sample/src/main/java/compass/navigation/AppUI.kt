@@ -1,6 +1,7 @@
 package compass.navigation
 
 import android.os.Parcelable
+import android.util.Log
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -122,6 +123,7 @@ fun HomePageUI() {
         ) {
             page(PageType.TAB_ONE.key) {
 
+                Log.e("HomePageUI: ", "${LocalParentViewModelStoreOwner.current.hashCode()}")
                 val detailNavController = getNavController()
                 StackNavHost(
                     navController = detailNavController,
@@ -152,7 +154,8 @@ fun HomePageUI() {
                         .padding(innerPadding)
                         .background(MaterialTheme.colors.background)
                 ) {
-                    Text(text = "Tab2", modifier = Modifier.align(Alignment.Center))
+                    val parentVMSO = LocalParentViewModelStoreOwner.current.hashCode()
+                    Text(text = "Tab2 $parentVMSO", modifier = Modifier.align(Alignment.Center))
                 }
             }
 
@@ -163,7 +166,8 @@ fun HomePageUI() {
                         .padding(innerPadding)
                         .background(MaterialTheme.colors.background)
                 ) {
-                    Text(text = "Tab3", modifier = Modifier.align(Alignment.Center))
+                    val parentVMSO = LocalParentViewModelStoreOwner.current.hashCode()
+                    Text(text = "Tab3 $parentVMSO", modifier = Modifier.align(Alignment.Center))
                 }
             }
 
@@ -174,7 +178,8 @@ fun HomePageUI() {
                         .padding(innerPadding)
                         .background(MaterialTheme.colors.background)
                 ) {
-                    Text(text = "Tab4", modifier = Modifier.align(Alignment.Center))
+                    val parentVMSO = LocalParentViewModelStoreOwner.current.hashCode()
+                    Text(text = "Tab4 $parentVMSO", modifier = Modifier.align(Alignment.Center))
                 }
             }
         }
@@ -191,14 +196,15 @@ private fun TabOneUI(modifier: Modifier) {
             .fillMaxSize()
             .border(5.dp, Color.Red, RoundedCornerShape(5.dp))
     ) {
+        val parentVMSO = LocalParentViewModelStoreOwner.current.hashCode()
         Text(
-            text = "Tab1", modifier = Modifier
+            text = "Tab1 $parentVMSO", modifier = Modifier
                 .padding(10.dp)
                 .align(Alignment.CenterHorizontally)
         )
         Spacer(modifier = Modifier.height(15.dp))
         Button(onClick = {
-            val navEntry = NavEntry(page = DetailPage("27").toPage(), navContext = navController.navContext)
+            val navEntry = NavEntry(page = DetailPage("27").toPage(), baseNavController = navController)
             navController.navigateTo(navEntry, false)
         }, modifier = Modifier.padding(10.dp)) {
             Text(text = "Click to goto DETAILS Page")
@@ -226,14 +232,15 @@ fun DetailPageUI(modifier: Modifier, page: DetailPage) {
                 ) {
                     val detailPage = DetailPage.from(it)
                     Column(modifier = Modifier.align(Alignment.Center)) {
+                        val parentVMSO = LocalParentViewModelStoreOwner.current.hashCode()
                         Text(
-                            text = "DETAIL - ${page.contentId}",
+                            text = "DETAIL - ${page.contentId} $parentVMSO",
                         )
 
                         Button(onClick = {
                             val navEntry = NavEntry(
                                 page = WatchPage(detailPage.contentId).toPage(),
-                                navContext = detailNavController.navContext
+                                baseNavController = detailNavController
                             )
                             detailNavController.navigateTo(navEntry, false)
                         }) {
@@ -258,7 +265,8 @@ fun WatchPageUI(page: WatchPage) {
             .fillMaxSize()
             .background(MaterialTheme.colors.background)
     ) {
-        Text(text = "WATCH - ${page.contentId}", modifier = Modifier.align(Alignment.Center))
+        val parentVMSO = LocalParentViewModelStoreOwner.current.hashCode()
+        Text(text = "WATCH - ${page.contentId} $parentVMSO", modifier = Modifier.align(Alignment.Center))
     }
 }
 
@@ -291,7 +299,7 @@ private fun XBottomNavBar(
                         navController.navigateTo(
                             NavEntry(
                                 page = screen.toPage(),
-                                navContext = navController.navContext
+                                baseNavController = navController
                             ), false
                         )
                     }
@@ -302,6 +310,6 @@ private fun XBottomNavBar(
 }
 
 @Composable
-private fun currentRoute(navController: NavController): String? {
+private fun currentRoute(navController: NavController): String {
     return navController.state?.backStack?.lastOrNull { it.isResumed() }?.page?.type ?: ""
 }

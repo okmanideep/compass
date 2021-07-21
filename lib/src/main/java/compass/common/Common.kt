@@ -32,18 +32,22 @@ internal class BackStackEntryScope(private val baseController: NavController) : 
     }
 }
 
-@Composable
-internal fun BackStackEntryScopeProvider(
-    backStackEntryScope: BackStackEntryScope,
-    content: @Composable () -> Unit
-) {
-    CompositionLocalProvider(
-        LocalNavContext provides backStackEntryScope,
-        LocalViewModelStoreOwner provides backStackEntryScope
-    ) {
-        content()
-    }
-}
+/**
+* Don't remove this commented code
+* */
+
+//@Composable
+//internal fun BackStackEntryScopeProvider(
+//    backStackEntryScope: BackStackEntryScope,
+//    content: @Composable () -> Unit
+//) {
+//    CompositionLocalProvider(
+//        LocalNavContext provides backStackEntryScope,
+//        LocalViewModelStoreOwner provides backStackEntryScope
+//    ) {
+//        content()
+//    }
+//}
 
 
 internal class Pages(

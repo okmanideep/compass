@@ -14,8 +14,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import compass.*
-import compass.common.BackStackEntryScope
-import compass.common.BackStackEntryScopeProvider
 import compass.common.Pages
 import compass.common.PagesBuilder
 
@@ -45,7 +43,6 @@ fun StackNavHost(
     val viewModelStoreOwner = checkNotNull(LocalViewModelStoreOwner.current) {
         "StackNavHost requires a ViewModelStoreOwner to be provided via LocalViewModelStoreOwner"
     }
-
     val stackNavViewModel = remember(pages, navController, viewModelStoreOwner) {
         stackNavViewModel(
             pages = pages,
@@ -55,10 +52,7 @@ fun StackNavHost(
     }
 
     DisposableEffect(stackNavViewModel, navController) {
-//        for (page in initialStack) {
-//            stackNavViewModel.navigateTo(page, false)
-//        }
-        stackNavViewModel.setInitialStack(initialStack, false)
+        stackNavViewModel.setInitialStack(initialStack, false, navController)
 
         navController.attachNavHostController(stackNavViewModel)
 
@@ -74,8 +68,8 @@ fun StackNavHost(
 
     Box(modifier = modifier) {
         for (entry in activeEntries) {
-            BackStackEntryScopeProvider(
-                backStackEntryScope = stackNavViewModel.scopeForEntryId(entry.id)
+            entry.LocalOwnersProvider(
+                parentViewModelStoreOwner = viewModelStoreOwner
             ) {
                 AnimatedVisibility(
                     visible = !entry.isClosing(),
@@ -111,7 +105,6 @@ internal class StackNavViewModel(
 ) : ViewModel(), NavHostController {
     private var navStack = NavStack()
     private var listener: ((NavState) -> Unit)? = null
-    private val scopeByEntryId = mutableMapOf<String, BackStackEntryScope>()
     var canGoBack by mutableStateOf(false)
         private set
 
@@ -145,19 +138,7 @@ internal class StackNavViewModel(
     }
 
     internal fun onExitCompleted() {
-        cleanScopes()
-    }
 
-    internal fun scopeForEntryId(entryId: String): BackStackEntryScope {
-        return scopeByEntryId[entryId]
-            ?: createScopeForEntryId(entryId)
-    }
-
-    private fun createScopeForEntryId(entryId: String): BackStackEntryScope {
-        val scope = BackStackEntryScope(navController)
-        scopeByEntryId[entryId] = scope
-
-        return scope
     }
 
     private fun onStateUpdated() {
@@ -165,38 +146,11 @@ internal class StackNavViewModel(
         listener?.invoke(navStack.toNavStackState())
     }
 
-    /**
-     * clean the scopes for items which are removed from stack
-     * but present in @param [scopeByEntryId]
-     * */
-    private fun cleanScopes() {
-        val list = mutableListOf<String>()
-        for (mutableEntry in scopeByEntryId) {
-            if (!navStack.contains(mutableEntry.key))
-                list.add(mutableEntry.key)
-        }
-
-        for (id in list) {
-            val scope = scopeByEntryId.remove(id)
-            scope?.viewModelStore?.clear()
-        }
-    }
-
-    override fun onCleared() {
-        scopeByEntryId.values.forEach {
-            it.viewModelStore.clear()
-        }
-        scopeByEntryId.clear()
-
-        super.onCleared()
-    }
-
-    fun setInitialStack(initialStack: List<Page>, forceUpdate: Boolean) {
+    fun setInitialStack(initialStack: List<Page>, forceUpdate: Boolean, baseNavController: NavController) {
         if (forceUpdate || !navStack.isSameInitialStack(initialStack)) {
             navStack.clearBackStack()
-            cleanScopes()
             initialStack.forEach {
-                page -> navigateTo(NavEntry(page = page, navContext = navController.navContext), false)
+                page -> navigateTo(NavEntry(page = page, baseNavController = baseNavController), false)
             }
         }
     }

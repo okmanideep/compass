@@ -6,13 +6,10 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
-import compass.common.BackStackEntryScope
-import compass.common.BackStackEntryScopeProvider
 import compass.common.Pages
 import compass.common.PagesBuilder
 
@@ -43,20 +40,13 @@ fun BottomNavHost(
         "BottomNavHost requires a ViewModelStoreOwner to be provided via LocalViewModelStoreOwner"
     }
 
+    LocalParentViewModelStoreOwner.provides(viewModelStoreOwner)
     val bottomNavViewModel = remember(pages, navController, viewModelStoreOwner) {
         bottomNavViewModel(pages, navController, viewModelStoreOwner)
     }
 
-    // TODO: 06/07/21 -- On enabling this logic, bottom tab selection messes up ????
-//    bottomNavViewModel.setStateChangedListener {
-////        Log.e("BottomNavHost: ", it.debugLog())
-//    }
-
     DisposableEffect(bottomNavViewModel, navController) {
-//        for (page in initialStack) {
-//            bottomNavViewModel.navigateTo(page, false)
-//        }
-        bottomNavViewModel.setInitialStack(initialStack, false)
+        bottomNavViewModel.setInitialStack(initialStack, false, navController)
         navController.attachNavHostController(bottomNavViewModel)
 
         onDispose {
@@ -71,11 +61,11 @@ fun BottomNavHost(
 
     Box(modifier = modifier) {
         for (entry in activeEntries) {
-            BackStackEntryScopeProvider(
-                backStackEntryScope = bottomNavViewModel.scopeForEntryId(entry.id)
+            entry.LocalOwnersProvider(
+                parentViewModelStoreOwner = viewModelStoreOwner
             ) {
                 AnimatedVisibility(
-                    visible = entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED),
+                    visible = entry.isResumed(),
                     enter = fadeIn(),
                     exit = fadeOut()
                 ) {
@@ -109,7 +99,6 @@ internal class BottomNavViewModel(
 ) : ViewModel(), NavHostController {
     private var navStack = BottomNavStack()
     private var listener: ((NavState) -> Unit)? = null
-    private val scopeByEntryId = mutableMapOf<String, BackStackEntryScope>()
     var canGoBack by mutableStateOf(false)
         private set
 
@@ -132,30 +121,24 @@ internal class BottomNavViewModel(
     }
 
     override fun goBack(): Boolean {
-        Log.e("GoBackBottomNav: ", "Before Back ${navStack.debugLog()} canGoBack[${navStack.canGoBack()}]")
+        Log.e(
+            "GoBackBottomNav: ",
+            "Before Back ${navStack.debugLog()} canGoBack[${navStack.canGoBack()}]"
+        )
         val canGoBack = navStack.canGoBack()
         if (canGoBack) {
             navStack.goBackWithPersist()
             onStateUpdated()
         }
-        Log.e("GoBackBottomNav: ", "After Back ${navStack.debugLog()} canGoBack[${navStack.canGoBack()}]")
+        Log.e(
+            "GoBackBottomNav: ",
+            "After Back ${navStack.debugLog()} canGoBack[${navStack.canGoBack()}]"
+        )
         return canGoBack
     }
 
     internal fun onExitCompleted() {
         cleanScopes()
-    }
-
-    internal fun scopeForEntryId(entryId: String): BackStackEntryScope {
-        return scopeByEntryId[entryId]
-            ?: createScopeForEntryId(entryId)
-    }
-
-    private fun createScopeForEntryId(entryId: String): BackStackEntryScope {
-        val scope = BackStackEntryScope(navController)
-        scopeByEntryId[entryId] = scope
-
-        return scope
     }
 
     private fun onStateUpdated() {
@@ -167,29 +150,16 @@ internal class BottomNavViewModel(
      * Intentionally left bank
      * this method makes no sense for Bottom Navigation
      * as VMs of the Pages loaded directly from BottomNav should persist
-     * even when they are removed from the stack
      * */
     private fun cleanScopes() {
         // do nothing for BottomNavHost
     }
 
-    /**
-     * this method is called when Page holding the BottomNav is popped
-     * hence clear all values to avoid memory leaks
-     * */
-    override fun onCleared() {
-        scopeByEntryId.values.forEach {
-            it.viewModelStore.clear()
-        }
-
-        super.onCleared()
-    }
-
-    fun setInitialStack(initialStack: List<Page>, forceUpdate: Boolean) {
+    fun setInitialStack(initialStack: List<Page>, forceUpdate: Boolean, baseNavController: NavController) {
         if (forceUpdate || !navStack.isSameInitialStack(initialStack)) {
             navStack.clearBackStack()
-            initialStack.forEach {
-                    page -> navigateTo(NavEntry(page = page, navContext = navController.navContext), false)
+            initialStack.forEach { page ->
+                navigateTo(NavEntry(page = page, baseNavController = baseNavController), false)
             }
         }
     }
