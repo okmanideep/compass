@@ -9,13 +9,10 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.*
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import compass.*
-import compass.core.NavStack
+import compass.core.StackInternal
 
 internal class Pages(
     val pageContentByType: Map<String, @Composable (NavEntry) -> Unit>
@@ -122,11 +119,21 @@ private fun stackNavViewModel(
 internal class StackNavViewModel(
     private val pages: Pages,
     private val navController: NavController
-) : ViewModel(), NavHostController {
-    private var navStack = NavStack()
+) : ViewModel(), NavHostController, LifecycleEventObserver {
+    private var hostLifecycleState: Lifecycle.State = Lifecycle.State.RESUMED
+    private val stack = StackInternal<NavEntry>()
     private var listener: ((NavState) -> Unit)? = null
     var canGoBack by mutableStateOf(false)
         private set
+
+    /**
+     * On Host Lifecycle Changed
+     */
+    override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
+        hostLifecycleState = source.lifecycle.currentState
+
+        updateState()
+    }
 
     override fun setStateChangedListener(listener: (NavState) -> Unit) {
         this.listener = listener
@@ -138,43 +145,73 @@ internal class StackNavViewModel(
     }
 
     override fun navigateTo(pageType: String, args: Parcelable?, replace: Boolean) {
-        if (replace) navStack.pop()
         val entry = NavEntry(
             pageType = pageType,
             args = args,
             parentNavController = navController
         )
-        navStack.add(entry)
-
-        onStateUpdated()
+        if (replace) {
+            stack.replace(entry)
+        } else {
+            stack.removePoppedEntries()
+            stack.add(entry)
+        }
+        updateState()
     }
 
     override fun canGoBack(): Boolean {
-        return navStack.canPop()
+        return stack.canPop()
     }
 
     override fun goBack(): Boolean {
-        val canGoBack = navStack.canPop()
+        val canGoBack = stack.canPop()
         if (canGoBack) {
-            navStack.pop()
-            onStateUpdated()
+            stack.pop()
+            updateState()
         }
 
         return canGoBack
     }
 
-    private fun onStateUpdated() {
-        canGoBack = navStack.canPop()
-        listener?.invoke(NavState(navStack.asList()))
-    }
-
-    private fun cleanScopes() {
-        //TODO: clean and clear scopes in scopeByEntryId based on back stack
-    }
-
     override fun onCleared() {
-        //TODO: clear all view models
+        for (entry in stack.asList()) {
+            entry.viewModelStore.clear()
+            entry.setLifecycleState(Lifecycle.State.DESTROYED)
+        }
 
         super.onCleared()
+    }
+
+    private fun onStateUpdated() {
+        canGoBack = stack.canPop()
+        listener?.invoke(NavState(stack.asList()))
+    }
+
+    private fun updateState() {
+        val entries = stack.asList()
+        for (i in entries.indices) {
+            when {
+                i < stack.currentEntryIndex -> {
+                    entries[i].setLifecycleState(capToHostLifecycle(Lifecycle.State.STARTED))
+                }
+                i == stack.currentEntryIndex -> {
+                    entries[i].setLifecycleState(capToHostLifecycle(Lifecycle.State.RESUMED))
+                }
+                else -> { // closed entries
+                    entries[i].viewModelStore.clear()
+                    entries[i].setLifecycleState(Lifecycle.State.DESTROYED)
+                }
+            }
+        }
+
+        onStateUpdated()
+    }
+
+    private fun capToHostLifecycle(state: Lifecycle.State): Lifecycle.State {
+        return if (state.ordinal > hostLifecycleState.ordinal) {
+            hostLifecycleState
+        } else {
+            state
+        }
     }
 }

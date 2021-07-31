@@ -87,7 +87,7 @@ class NavEntry(
         return lifecycleRegistry
     }
 
-    fun setLifecycleState(state: Lifecycle.State) {
+    internal fun setLifecycleState(state: Lifecycle.State) {
         lifecycleRegistry.currentState = state
     }
 
