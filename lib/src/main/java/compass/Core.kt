@@ -1,12 +1,12 @@
 package compass
 
-import android.content.Context
-import android.content.ContextWrapper
 import android.os.Parcelable
-import android.util.Log
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.*
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import kotlinx.parcelize.Parcelize
-import java.util.UUID
+import java.util.*
 
 @Parcelize
 data class Page(
@@ -16,25 +16,15 @@ data class Page(
 
 @Composable
 fun getNavController(): NavController {
-    val navContext = LocalNavContext.current
+    return LocalNavController.current
         ?: remember {
-            object : NavContext {
-                override fun owner(): NavController? {
-                    return null
-                }
-
-                override fun controller(): NavController {
-                    return NavController(this)
-                }
-            }
+            NavController(null)
         }
-
-    return navContext.controller()
 }
 
-class NavController(private val navContext: NavContext) {
+class NavController(private val parent: NavController?) {
     private var hostController: NavHostController? = null
-    var state by mutableStateOf(NavStackState())
+    var state by mutableStateOf(NavState())
         private set
     var canGoBack by mutableStateOf(false)
         private set
@@ -55,67 +45,76 @@ class NavController(private val navContext: NavContext) {
         hostController = null
     }
 
-    fun navigateTo(page: Page, popUpTo: Boolean) {
+    fun navigateTo(pageType: String, args: Parcelable? = null, replace: Boolean = false) {
         hostController?.let {
-            if (it.canNavigateTo(page)) {
-                it.navigateTo(page, popUpTo)
+            if (it.canNavigateTo(pageType)) {
+                it.navigateTo(pageType, args, replace)
             } else {
-                navContext.owner()?.navigateTo(page, popUpTo)
-            }
-        } ?: navContext.owner()?.navigateTo(page, popUpTo)
+                parent?.navigateTo(pageType, args, replace)
+            } ?: parent?.navigateTo(pageType, args, replace)
+        }
     }
 
     fun goBack() {
         if (hostController?.goBack() != true) {
-            navContext.owner()?.goBack()
+            parent?.goBack()
         }
     }
 }
 
+val LocalNavController = compositionLocalOf<NavController?> { null }
+
 interface NavHostController {
-    fun setStateChangedListener(listener: (NavStackState) -> Unit)
-    fun canNavigateTo(page: Page): Boolean
-    fun navigateTo(page: Page, popUpTo: Boolean = false)
+    fun setStateChangedListener(listener: (NavState) -> Unit)
+    fun canNavigateTo(pageType: String): Boolean
+    fun navigateTo(pageType: String, args: Parcelable? = null, replace: Boolean = false)
     fun canGoBack(): Boolean
     fun goBack(): Boolean
 }
 
-interface NavContext {
-    fun owner(): NavController?
-    fun controller(): NavController
-}
-
-val LocalNavContext = compositionLocalOf<NavContext?> { null }
-
-data class NavStackEntry(
-    val page: Page,
-    val isClosing: Boolean,
-    val id: String = UUID.randomUUID().toString()
-)
-
-internal class MutableNavStackEntry(
-    val page: Page,
-    var isClosing: Boolean,
+class NavEntry(
     val id: String = UUID.randomUUID().toString(),
-) {
-    fun toBackStackEntry(): NavStackEntry {
-        return NavStackEntry(page, isClosing, id)
+    val pageType: String,
+    val args: Parcelable?,
+    private val parentNavController: NavController,
+    private val viewModelStore: ViewModelStore = ViewModelStore(),
+) : LifecycleOwner, ViewModelStoreOwner {
+    private val lifecycleRegistry = LifecycleRegistry(this)
+
+    val controller by lazy { NavController(parentNavController) }
+
+    override fun getLifecycle(): Lifecycle {
+        return lifecycleRegistry
+    }
+
+    fun setLifecycleState(state: Lifecycle.State) {
+        lifecycleRegistry.currentState = state
+    }
+
+    override fun getViewModelStore(): ViewModelStore {
+        return viewModelStore
     }
 }
 
-data class NavStackState(
-    val backStack: List<NavStackEntry> = emptyList()
+@Composable
+fun NavEntry.LocalOwnersProvider(content: @Composable () -> Unit) {
+    CompositionLocalProvider(
+        LocalNavController provides this.controller,
+        LocalViewModelStoreOwner provides this,
+        LocalLifecycleOwner provides this,
+    ) {
+        content()
+    }
+}
+
+class NavState(
+    val backStack: List<NavEntry> = emptyList()
 ) {
-    /**
-     * Active entry and the entry which is probably exiting or present below the
-     * active entry which is animating in
-     *
-     * All the entries which are supposed to be drawn on the screen fully / partially
-     */
-    fun activeEntries(): List<NavStackEntry> {
+    fun activeEntries(): List<NavEntry> {
         if (backStack.isEmpty()) return emptyList()
 
-        val activeEntryIndex = backStack.indexOfLast { !it.isClosing }
+        val activeEntryIndex =
+            backStack.indexOfLast { it.lifecycle.currentState == Lifecycle.State.RESUMED }
 
         val topIndex = if (activeEntryIndex + 1 == backStack.size) { // active item at top
             activeEntryIndex
@@ -134,80 +133,3 @@ data class NavStackState(
     }
 }
 
-inline fun <T> List<T>.takeUntil(predicate: (T) -> Boolean): List<T> {
-    val list = ArrayList<T>()
-    for (item in this) {
-        list.add(item)
-        if (predicate(item)) {
-            break
-        }
-    }
-    return list
-}
-
-internal data class NavStack(
-    private val backStack: List<MutableNavStackEntry>,
-) {
-    companion object {
-        val EMPTY = NavStack(emptyList())
-    }
-
-    fun add(page: Page): NavStack {
-        val cleanBackStack = backStack.takeWhile { !it.isClosing }
-        val entry = MutableNavStackEntry(page, false)
-        return copy(backStack = cleanBackStack + entry)
-    }
-
-    fun pop(): NavStack {
-        val cleanBackStack = backStack.takeWhile { !it.isClosing }
-        check(cleanBackStack.isNotEmpty()) { "Cannot pop. Nothing in stack" }
-        check(cleanBackStack.size > 1) { "Only one item in the stack. Cannot pop" }
-
-        val current = cleanBackStack.last()
-        current.isClosing = true
-        return this.copy(backStack = cleanBackStack)
-    }
-
-    fun popUpTo(pageType: String): NavStack {
-        val cleanBackStack = backStack.takeWhile { !it.isClosing }
-
-        val pageIndex = cleanBackStack.indexOfFirst { it.page.type == pageType }
-        if (pageIndex < 0 || pageIndex == cleanBackStack.size - 1) return NavStack(cleanBackStack)
-
-        return copy(
-            backStack = cleanBackStack.take(pageIndex) + cleanBackStack[pageIndex] + cleanBackStack.last()
-                .apply { isClosing = true })
-    }
-
-    fun popUpTo(page: Page): NavStack {
-        val cleanBackStack = backStack.takeWhile { !it.isClosing }
-
-        val pageIndex = cleanBackStack.indexOfFirst { it.page.type == page.type }
-        if (pageIndex < 0 || pageIndex == cleanBackStack.size - 1) return NavStack(cleanBackStack)
-
-        return copy(
-            backStack = cleanBackStack.take(pageIndex) + cleanBackStack[pageIndex] + cleanBackStack.last()
-                .apply { isClosing = true })
-    }
-
-    fun addOrPopUpTo(page: Page): NavStack {
-        val cleanBackStack = backStack.takeWhile { !it.isClosing }
-
-        val pageIndex = cleanBackStack.indexOfFirst { it.page.type == page.type }
-        if (pageIndex < 0 || pageIndex == cleanBackStack.size - 1) return add(page)
-
-        return copy(
-            backStack = cleanBackStack.take(pageIndex) + cleanBackStack[pageIndex] + cleanBackStack.last()
-                .apply { isClosing = true })
-    }
-
-    fun canGoBack(): Boolean = cleanBackStack().size > 1
-
-    fun toNavStackState(): NavStackState {
-        return NavStackState(this.backStack.map { it.toBackStackEntry() })
-    }
-
-    private fun cleanBackStack(): List<MutableNavStackEntry> {
-        return backStack.takeWhile { !it.isClosing }
-    }
-}

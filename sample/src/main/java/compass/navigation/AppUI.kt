@@ -12,6 +12,7 @@ import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import compass.NavEntry
 import compass.Page
 import compass.getNavController
 import compass.stack.StackNavHost
@@ -26,11 +27,11 @@ sealed class AppPage(
     abstract fun args(): Parcelable?
 }
 
-enum class PageType(val key: String){
+enum class PageType(val key: String) {
     HOME("home"), DETAIL("detail"), WATCH("watch")
 }
 
-object HomePage: AppPage(
+object HomePage : AppPage(
     pageType = PageType.HOME,
 ) {
     override fun toBreadCrumbLabel(): String {
@@ -43,12 +44,12 @@ object HomePage: AppPage(
 }
 
 @Parcelize
-data class DetailPage(val contentId: String): AppPage(
+data class DetailPage(val contentId: String) : AppPage(
     pageType = PageType.DETAIL
 ), Parcelable {
     companion object {
-        fun from(page: Page): DetailPage {
-            return page.args as DetailPage
+        fun from(entry: NavEntry): DetailPage {
+            return entry.args as DetailPage
         }
     }
 
@@ -62,14 +63,9 @@ data class DetailPage(val contentId: String): AppPage(
 }
 
 @Parcelize
-data class WatchPage(val contentId: String): AppPage(
+data class WatchPage(val contentId: String) : AppPage(
     pageType = PageType.WATCH
 ), Parcelable {
-    companion object {
-        fun from(page: Page): WatchPage {
-            return page.args as WatchPage
-        }
-    }
 
     override fun toBreadCrumbLabel(): String {
         return "watch($contentId)"
@@ -93,16 +89,17 @@ fun App() {
         }
 
         page(PageType.DETAIL.key) {
-            DetailPageUI(DetailPage.from(it))
+            DetailPageUI(it.args as DetailPage)
         }
     }
 }
 
 @Composable
 fun HomePageUI() {
-    Box(modifier = Modifier
-        .fillMaxSize()
-        .background(MaterialTheme.colors.background)
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colors.background)
     ) {
         Text(text = "HOME", modifier = Modifier.align(Alignment.Center))
     }
@@ -110,27 +107,32 @@ fun HomePageUI() {
 
 @Composable
 fun DetailPageUI(page: DetailPage) {
-    Box(modifier = Modifier
-        .fillMaxSize()
-        .background(MaterialTheme.colors.background)
-    ){
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colors.background)
+    ) {
         val detailNavController = getNavController()
-        StackNavHost(navController = detailNavController
-            , startDestination = page.toPage()) {
+        StackNavHost(
+            navController = detailNavController, startDestination = page.toPage()
+        ) {
             page(PageType.DETAIL.key) {
-                Box(modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colors.background)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colors.background)
                 ) {
-                    val detailPage = DetailPage.from(it)
+                    val detailPage = it.args as DetailPage
                     Column(modifier = Modifier.align(Alignment.Center)) {
                         Text(
                             text = "DETAIL - ${page.contentId}",
                         )
 
                         Button(onClick = {
+                            val page = WatchPage(detailPage.contentId)
                             detailNavController.navigateTo(
-                                WatchPage(detailPage.contentId).toPage(),
+                                page.pageType.key,
+                                page,
                                 false
                             )
                         }) {
@@ -141,7 +143,7 @@ fun DetailPageUI(page: DetailPage) {
             }
 
             page(PageType.WATCH.key) {
-                WatchPageUI(page = WatchPage.from(it))
+                WatchPageUI(page = it.args as WatchPage)
             }
 
         }
@@ -150,10 +152,11 @@ fun DetailPageUI(page: DetailPage) {
 
 @Composable
 fun WatchPageUI(page: WatchPage) {
-    Box(modifier = Modifier
-        .fillMaxSize()
-        .background(MaterialTheme.colors.background)
-    ){
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colors.background)
+    ) {
         Text(text = "WATCH - ${page.contentId}", modifier = Modifier.align(Alignment.Center))
     }
 }
