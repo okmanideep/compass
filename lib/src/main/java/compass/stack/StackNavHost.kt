@@ -122,7 +122,7 @@ internal class StackNavViewModel(
 ) : ViewModel(), NavHostController, LifecycleEventObserver {
     private var hostLifecycleState: Lifecycle.State = Lifecycle.State.RESUMED
     private val stack = StackInternal<NavEntry>()
-    private var listener: ((NavState) -> Unit)? = null
+    private var listener: ((NavBackStack) -> Unit)? = null
     var canGoBack by mutableStateOf(false)
         private set
 
@@ -135,7 +135,7 @@ internal class StackNavViewModel(
         updateState()
     }
 
-    override fun setStateChangedListener(listener: (NavState) -> Unit) {
+    override fun setStateChangedListener(listener: (NavBackStack) -> Unit) {
         this.listener = listener
         onStateUpdated()
     }
@@ -184,7 +184,7 @@ internal class StackNavViewModel(
 
     private fun onStateUpdated() {
         canGoBack = stack.canPop()
-        listener?.invoke(NavState(stack.asList()))
+        listener?.invoke(NavBackStack(stack.asList()))
     }
 
     private fun updateState() {
