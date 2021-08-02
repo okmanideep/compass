@@ -1,5 +1,6 @@
 package compass.stack
 
+import android.os.Parcelable
 import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -9,6 +10,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStoreOwner
@@ -122,6 +124,17 @@ internal class StackNavViewModel(
         onStateUpdated()
     }
 
+    override fun navigateTo(navEntry: NavEntry, pageExtras: Parcelable?, navOptions: NavOptions) {
+        if (navOptions.clearTop) {
+            navStack.addOrPopUpTo(navEntry = navEntry)
+        } else {
+            removeClosedEntries()
+            navStack.add(navEntry = navEntry)
+        }
+        updateEntries()
+        onStateUpdated()
+    }
+
     override fun canGoBack(): Boolean {
         return navStack.canPop()
     }
@@ -131,10 +144,36 @@ internal class StackNavViewModel(
         val canGoBack = navStack.canPop()
         if (canGoBack) {
             navStack.pop()
+            updateEntries()
             onStateUpdated()
         }
         Log.e("GoBackStackNav: ", "After Back ${navStack.debugLog()} canGoBack[${navStack.canPop()}]")
         return canGoBack
+    }
+
+    private fun updateEntries() {
+        val entries = navStack.entries
+        for (i in 0 until entries.size) {
+            when {
+                i < navStack.currentEntryIndex -> {
+                    entries[i].setLifecycleState(navStack.capToHostLifecycle(Lifecycle.State.STARTED))
+                }
+                i == navStack.currentEntryIndex -> {
+                    entries[i].setLifecycleState(navStack.capToHostLifecycle(Lifecycle.State.RESUMED))
+                }
+                else -> { // closed entries
+                    entries[i].viewModelStore.clear()
+                    entries[i].setLifecycleState(Lifecycle.State.DESTROYED)
+                }
+            }
+        }
+    }
+
+    private fun removeClosedEntries() {
+        val entries = navStack.entries
+        while (navStack.currentEntryIndex + 1 > entries.size) {
+            entries.removeLast()
+        }
     }
 
     internal fun onExitCompleted() {
@@ -143,14 +182,20 @@ internal class StackNavViewModel(
 
     private fun onStateUpdated() {
         canGoBack = navStack.canPop()
-        listener?.invoke(navStack.toNavStackState())
+        listener?.invoke(toNavStackState())
+    }
+
+    fun toNavStackState(): NavState {
+        return StackNavState(navStack.entries.map { it })
     }
 
     fun setInitialStack(initialStack: List<Page>, forceUpdate: Boolean, baseNavController: NavController) {
         if (forceUpdate || !navStack.isSameInitialStack(initialStack)) {
             navStack.clearBackStack()
+            updateEntries()
+            removeClosedEntries()
             initialStack.forEach {
-                page -> navigateTo(NavEntry(page = page, baseNavController = baseNavController), false)
+                page -> navigateTo(NavEntry(page = page, baseNavController = baseNavController), null, NavOptions(false))
             }
         }
     }

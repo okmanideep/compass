@@ -59,27 +59,44 @@ class NavController(val navContext: NavContext) {
         hostController = null
     }
 
-    fun navigateTo(navEntry: NavEntry, popUpTo: Boolean) {
+    /**
+     * @param pageExtras are for passing extra info required for page business logic eg. ContentId
+     * @param navOptions are for extras like clearTop etc flags
+     * */
+
+    fun navigateTo(page: Page, pageExtras: Parcelable?, navOptions: NavOptions) {
         hostController?.let {
-            if (it.canNavigateTo(navEntry.page)) {
-                it.navigateTo(navEntry, popUpTo)
-            } else {
-                navContext.owner()?.navigateTo(navEntry, popUpTo)
-            }
-        } ?: navContext.owner()?.navigateTo(navEntry, popUpTo)
+            if (it.canNavigateTo(page = page)) {
+                val navEntry = createNavEntry(page, this)
+                it.navigateTo(navEntry = navEntry, null, navOptions)
+            } else navContext.owner()?.navigateTo(page, pageExtras, navOptions)
+        } ?: navContext.owner()?.navigateTo(page, pageExtras, navOptions)
     }
 
-    fun goBack() {
-        if (hostController?.goBack() != true) {
-            navContext.owner()?.goBack()
-        }
+    private fun createNavEntry(page: Page, navController: NavController): NavEntry {
+        return NavEntry(page = page, baseNavController = navController)
     }
+
+//    fun navigateTo(navEntry: NavEntry, popUpTo: Boolean) {
+//        hostController?.let {
+//            if (it.canNavigateTo(navEntry.page)) {
+//                it.navigateTo(navEntry, popUpTo)
+//            } else {
+//                navContext.owner()?.navigateTo(navEntry, popUpTo)
+//            }
+//        } ?: navContext.owner()?.navigateTo(navEntry, popUpTo)
+//    }
 }
+
+data class NavOptions(
+    val clearTop: Boolean = false
+)
 
 interface NavHostController {
     fun setStateChangedListener(listener: (NavState) -> Unit)
     fun canNavigateTo(page: Page): Boolean
-    fun navigateTo(navEntry: NavEntry, popUpTo: Boolean = false)
+    fun navigateTo(navEntry: NavEntry, popUpTo: Boolean)
+    fun navigateTo(navEntry: NavEntry, pageExtras: Parcelable?, navOptions: NavOptions)
     fun canGoBack(): Boolean
     fun goBack(): Boolean
 }
@@ -136,7 +153,10 @@ class NavEntry(
 }
 
 @Composable
-fun NavEntry.LocalOwnersProvider(parentViewModelStoreOwner: ViewModelStoreOwner, content: @Composable () -> Unit) {
+fun NavEntry.LocalOwnersProvider(
+    parentViewModelStoreOwner: ViewModelStoreOwner,
+    content: @Composable () -> Unit
+) {
     CompositionLocalProvider(
         LocalNavContext provides this,
         LocalViewModelStoreOwner provides this,
@@ -216,83 +236,18 @@ inline fun <T> List<T>.takeUntil(predicate: (T) -> Boolean): List<T> {
 }
 
 internal class NavStack {
-
-    private var currentEntryIndex = -1
-    private val entries = LinkedList<NavEntry>()
+    var currentEntryIndex = -1
+    val entries = LinkedList<NavEntry>()
     private var hostLifecycleState: Lifecycle.State = Lifecycle.State.RESUMED
 
 
     fun updateHostLifecycleState(state: Lifecycle.State) {
         hostLifecycleState = state
-        updateEntries()
     }
 
-    fun add(entry: NavEntry) {
-        removeClosedEntries()
-        entries.addLast(entry)
+    fun add(navEntry: NavEntry) {
+        entries.addLast(navEntry)
         currentEntryIndex += 1
-        updateEntries()
-    }
-
-    fun replace(entry: NavEntry) {
-        check(currentEntryIndex >= 0) { "${currentEntryIndex + 1} items in the stack. Can't replace" }
-        entries.add(currentEntryIndex, entry)
-        updateEntries()
-    }
-
-    fun canPop(): Boolean {
-        return currentEntryIndex > 0
-    }
-
-    fun pop() {
-        check(currentEntryIndex > 0) { "${currentEntryIndex + 1} items in the stack. Can't pop" }
-        currentEntryIndex -= 1
-        updateEntries()
-    }
-
-    fun popUpTo(entry: NavEntry) {
-        val popToIndex = entries.firstIndex { it.page.type == entry.page.type }
-        if (popToIndex < 0 || popToIndex > currentEntryIndex) {
-            pop()
-        } else {
-            currentEntryIndex = popToIndex
-        }
-        updateEntries()
-    }
-
-    private fun updateEntries() {
-        for (i in 0 until entries.size) {
-            when {
-                i < currentEntryIndex -> {
-                    entries[i].setLifecycleState(capToHostLifecycle(Lifecycle.State.STARTED))
-                }
-                i == currentEntryIndex -> {
-                    entries[i].setLifecycleState(capToHostLifecycle(Lifecycle.State.RESUMED))
-                }
-                else -> { // closed entries
-                    entries[i].viewModelStore.clear()
-                    entries[i].setLifecycleState(Lifecycle.State.DESTROYED)
-                }
-            }
-        }
-    }
-
-    private fun removeClosedEntries() {
-        while (currentEntryIndex + 1 > entries.size) {
-            entries.removeLast()
-        }
-    }
-
-    private fun capToHostLifecycle(state: Lifecycle.State): Lifecycle.State {
-        return if (state.ordinal > hostLifecycleState.ordinal) {
-            hostLifecycleState
-        } else {
-            state
-        }
-    }
-
-    fun toNavStackState(): NavState {
-        return StackNavState(this.entries.map { it })
     }
 
     fun addOrBringForward(navEntry: NavEntry) {
@@ -303,7 +258,49 @@ internal class NavStack {
         }
         val existingPage = entries.removeAt(pageIndex)
         entries.add(existingPage)
-        updateEntries()
+        currentEntryIndex = entries.lastIndex
+    }
+
+    fun replace(entry: NavEntry) {
+        check(currentEntryIndex >= 0) { "${currentEntryIndex + 1} items in the stack. Can't replace" }
+        entries.add(currentEntryIndex, entry)
+    }
+
+    fun canPop(): Boolean {
+        return currentEntryIndex > 0
+    }
+
+    /**
+     * To be used with BottomNavViewModel
+     * */
+    fun goBackWithPersist() {
+        check(currentEntryIndex > 0) { "${currentEntryIndex + 1} items in the stack. Can't pop" }
+        currentEntryIndex -= 1
+    }
+
+    /**
+     * To be used with StackNavViewModel
+     * */
+    fun pop() {
+        check(currentEntryIndex > 0) { "${currentEntryIndex + 1} items in the stack. Can't pop" }
+        currentEntryIndex -= 1
+    }
+
+    fun popUpTo(navEntry: NavEntry) {
+        val popToIndex = entries.firstIndex { it.page.type == navEntry.page.type }
+        if (popToIndex < 0 || popToIndex > currentEntryIndex) {
+            pop()
+        } else {
+            currentEntryIndex = popToIndex
+        }
+    }
+
+    fun capToHostLifecycle(state: Lifecycle.State): Lifecycle.State {
+        return if (state.ordinal > hostLifecycleState.ordinal) {
+            hostLifecycleState
+        } else {
+            state
+        }
     }
 
     fun addOrPopUpTo(navEntry: NavEntry) {
@@ -328,8 +325,6 @@ internal class NavStack {
 
     fun clearBackStack() {
         currentEntryIndex = -1
-        updateEntries()
-        removeClosedEntries()
     }
 
     fun isSameInitialStack(initialStack: List<Page>): Boolean {
@@ -341,108 +336,4 @@ internal class NavStack {
         }
         return true
     }
-}
-
-internal class BottomNavStack {
-    private var headIndex = 0
-    private var tailIndex = -1
-    private val entries = LinkedList<NavEntry>()
-    private var hostLifecycleState: Lifecycle.State = Lifecycle.State.RESUMED
-
-    fun updateHostLifecycleState(state: Lifecycle.State) {
-        hostLifecycleState = state
-    }
-
-    fun add(entry: NavEntry) {
-        entries.addLast(entry)
-        tailIndex = entries.size - 1
-        updateEntries()
-    }
-
-    fun canGoBack(): Boolean {
-        return tailIndex > headIndex
-    }
-
-    fun goBackWithPersist() {
-        check(tailIndex > headIndex) { "${tailIndex + 1} items in the stack. Can't pop" }
-        tailIndex -= 1
-        updateEntries()
-    }
-
-    private fun capToHostLifecycle(state: Lifecycle.State): Lifecycle.State {
-        return if (state.ordinal > hostLifecycleState.ordinal) {
-            hostLifecycleState
-        } else {
-            state
-        }
-    }
-
-    fun toNavStackState(): NavState {
-        return BottomNavState(this.entries.map { it })
-    }
-
-    fun addOrBringForward(navEntry: NavEntry) {
-        val existingPageIndex = entries.firstIndex { it.page.type == navEntry.page.type }
-        if (existingPageIndex < 0) {
-            add(navEntry)
-            return
-        }
-
-        tailIndex = existingPageIndex
-        updateEntries()
-    }
-
-    fun addOrPopUpTo(navEntry: NavEntry) {
-        throw IllegalStateException("addOrPopUpTo() Not Implemented Yet")
-    }
-
-    private fun updateEntries() {
-        for (i in 0 until entries.size) {
-            when (i) {
-                in (headIndex) until tailIndex -> {
-                    entries[i].setLifecycleState(capToHostLifecycle(Lifecycle.State.STARTED))
-                }
-                tailIndex -> {
-                    entries[i].setLifecycleState(capToHostLifecycle(Lifecycle.State.RESUMED))
-                }
-                else -> { // persisted entries
-                    entries[i].setLifecycleState(Lifecycle.State.CREATED)
-                }
-            }
-        }
-    }
-
-    fun contains(id: String): Boolean {
-        entries.forEach { entry ->
-            if (entry.id == id)
-                return true
-        }
-        return false
-    }
-
-    fun debugLog(): String {
-        var log = ""
-        entries.forEach {
-                entry -> log = log.plus(" -> ${entry.page.type} [${entry.isClosing()}]")
-        }
-        return log
-    }
-
-    /**
-     * entries for Bottom Nav must never be cleared
-     * */
-    fun clearBackStack() {
-
-    }
-
-    fun isSameInitialStack(initialStack: List<Page>): Boolean {
-        if (entries.isEmpty())
-            return false
-        initialStack.forEachIndexed { index, page ->
-            if (entries.size > index && entries[index].page != page)
-                return false
-        }
-        return true
-    }
-
 }

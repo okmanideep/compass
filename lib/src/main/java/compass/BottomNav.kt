@@ -1,11 +1,13 @@
 package compass
 
+import android.os.Parcelable
 import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStoreOwner
@@ -97,7 +99,7 @@ internal class BottomNavViewModel(
     private val pages: Pages,
     private val navController: NavController
 ) : ViewModel(), NavHostController {
-    private var navStack = BottomNavStack()
+    private var navStack = NavStack()
     private var listener: ((NavState) -> Unit)? = null
     var canGoBack by mutableStateOf(false)
         private set
@@ -112,29 +114,58 @@ internal class BottomNavViewModel(
     }
 
     override fun navigateTo(navEntry: NavEntry, popUpTo: Boolean) {
-        navStack.addOrBringForward(navEntry = navEntry)
+//        navStack.addOrBringForward(navEntry = navEntry)
+//        onStateUpdated()
+    }
+
+    override fun navigateTo(navEntry: NavEntry, pageExtras: Parcelable?, navOptions: NavOptions) {
+        if (navOptions.clearTop) {
+            navStack.addOrPopUpTo(navEntry = navEntry)
+        } else {
+            navStack.addOrBringForward(navEntry = navEntry)
+        }
+        updateEntries()
         onStateUpdated()
     }
 
     override fun canGoBack(): Boolean {
-        return navStack.canGoBack()
+        return navStack.canPop()
     }
 
     override fun goBack(): Boolean {
         Log.e(
             "GoBackBottomNav: ",
-            "Before Back ${navStack.debugLog()} canGoBack[${navStack.canGoBack()}]"
+            "Before Back ${navStack.debugLog()} canGoBack[${navStack.canPop()}]"
         )
-        val canGoBack = navStack.canGoBack()
+        val canGoBack = navStack.canPop()
         if (canGoBack) {
             navStack.goBackWithPersist()
+            updateEntries()
             onStateUpdated()
         }
         Log.e(
             "GoBackBottomNav: ",
-            "After Back ${navStack.debugLog()} canGoBack[${navStack.canGoBack()}]"
+            "After Back ${navStack.debugLog()} canGoBack[${navStack.canPop()}]"
         )
         return canGoBack
+    }
+
+    private fun updateEntries() {
+        val entries = navStack.entries
+        val tailIndex = navStack.currentEntryIndex
+        for (i in 0 until entries.size) {
+            when (i) {
+                in 0 until tailIndex -> {
+                    entries[i].setLifecycleState(navStack.capToHostLifecycle(Lifecycle.State.STARTED))
+                }
+                tailIndex -> {
+                    entries[i].setLifecycleState(navStack.capToHostLifecycle(Lifecycle.State.RESUMED))
+                }
+                else -> { // persisted entries
+                    entries[i].setLifecycleState(Lifecycle.State.CREATED)
+                }
+            }
+        }
     }
 
     internal fun onExitCompleted() {
@@ -142,8 +173,12 @@ internal class BottomNavViewModel(
     }
 
     private fun onStateUpdated() {
-        canGoBack = navStack.canGoBack()
-        listener?.invoke(navStack.toNavStackState())
+        canGoBack = navStack.canPop()
+        listener?.invoke(toNavStackState())
+    }
+
+    private fun toNavStackState(): NavState {
+        return BottomNavState(navStack.entries.map { it })
     }
 
     /**
@@ -159,7 +194,7 @@ internal class BottomNavViewModel(
         if (forceUpdate || !navStack.isSameInitialStack(initialStack)) {
             navStack.clearBackStack()
             initialStack.forEach { page ->
-                navigateTo(NavEntry(page = page, baseNavController = baseNavController), false)
+                navigateTo(NavEntry(page = page, baseNavController = baseNavController), null, NavOptions(false))
             }
         }
     }
