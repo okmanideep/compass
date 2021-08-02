@@ -270,17 +270,6 @@ internal class NavStack {
         return currentEntryIndex > 0
     }
 
-    /**
-     * To be used with BottomNavViewModel
-     * */
-    fun goBackWithPersist() {
-        check(currentEntryIndex > 0) { "${currentEntryIndex + 1} items in the stack. Can't pop" }
-        currentEntryIndex -= 1
-    }
-
-    /**
-     * To be used with StackNavViewModel
-     * */
     fun pop() {
         check(currentEntryIndex > 0) { "${currentEntryIndex + 1} items in the stack. Can't pop" }
         currentEntryIndex -= 1

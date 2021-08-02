@@ -139,7 +139,7 @@ internal class BottomNavViewModel(
         )
         val canGoBack = navStack.canPop()
         if (canGoBack) {
-            navStack.goBackWithPersist()
+            navStack.pop()
             updateEntries()
             onStateUpdated()
         }
