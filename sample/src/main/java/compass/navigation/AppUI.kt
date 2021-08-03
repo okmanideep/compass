@@ -14,7 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import compass.*
-import compass.stack.StackNavHost
+import compass.stack_nav.StackNavHost
 import kotlinx.parcelize.Parcelize
 
 sealed class AppPage(

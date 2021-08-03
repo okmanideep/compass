@@ -1,4 +1,4 @@
-package compass.stack
+package compass.stack_nav
 
 import android.os.Parcelable
 import android.util.Log
@@ -16,8 +16,13 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import compass.*
-import compass.common.Pages
-import compass.common.PagesBuilder
+import compass.Page
+import compass.Pages
+import compass.PagesBuilder
+import compass.core.NavEntry
+import compass.core.NavHostController
+import compass.core.NavStack
+import compass.core.NavState
 
 @ExperimentalAnimationApi
 @Composable
