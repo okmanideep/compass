@@ -14,10 +14,10 @@ import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import compass.*
 import compass.core.StackInternal
 
-internal class Graph(
-    private val destinationByType: Map<String, Destination>
+internal class StackGraph(
+    private val destinationByType: Map<String, StackDestination>
 ) {
-    fun destinationFor(pageType: String): Destination {
+    fun destinationFor(pageType: String): StackDestination {
         return destinationByType[pageType]
             ?: throw IllegalArgumentException("No destination for $pageType")
     }
@@ -27,16 +27,16 @@ internal class Graph(
     }
 }
 
-internal class Destination(
+internal class StackDestination(
     val content: @Composable (NavEntry) -> Unit,
     val isTransparent: Boolean,
     val enterTransition: EnterTransition,
     val exitTransition: ExitTransition,
 )
 
-class GraphBuilder
+class StackGraphBuilder
 internal constructor(
-    private val destinationByType: HashMap<String, Destination> = HashMap(),
+    private val destinationByType: HashMap<String, StackDestination> = HashMap(),
 ) {
     fun page(
         type: String,
@@ -45,12 +45,12 @@ internal constructor(
         exitTransition: ExitTransition = slideOutHorizontally({ it }),
         content: @Composable (NavEntry) -> Unit,
     ) {
-        destinationByType[type] = Destination(
+        destinationByType[type] = StackDestination(
             content, isTransparent, enterTransition, exitTransition
         )
     }
 
-    internal fun build() = Graph(destinationByType)
+    internal fun build() = StackGraph(destinationByType)
 }
 
 @ExperimentalAnimationApi
@@ -59,7 +59,7 @@ fun StackNavHost(
     navController: NavController,
     startDestination: Page,
     modifier: Modifier = Modifier,
-    builder: GraphBuilder.() -> Unit
+    builder: StackGraphBuilder.() -> Unit
 ) = StackNavHost(
     navController = navController,
     initialStack = listOf(startDestination),
@@ -73,9 +73,9 @@ fun StackNavHost(
     navController: NavController,
     initialStack: List<Page>,
     modifier: Modifier = Modifier,
-    builder: GraphBuilder.() -> Unit
+    builder: StackGraphBuilder.() -> Unit
 ) {
-    val graph = GraphBuilder().apply(builder).build()
+    val graph = remember { StackGraphBuilder().apply(builder).build() }
     val viewModelStoreOwner = checkNotNull(LocalViewModelStoreOwner.current) {
         "StackNavHost requires a ViewModelStoreOwner to be provided via LocalViewModelStoreOwner"
     }
@@ -113,7 +113,7 @@ fun StackNavHost(
 @Composable
 private fun PageStack(
     backStack: NavBackStack,
-    graph: Graph,
+    graph: StackGraph,
     modifier: Modifier = Modifier,
 ) {
     val transition = updateTransition(backStack, label = "Page Stack Transition")
@@ -171,14 +171,14 @@ private fun NavBackStack.hasEntry(entry: NavEntry): Boolean {
 }
 
 @Composable
-private fun NavEntry.Render(graph: Graph) {
+private fun NavEntry.Render(graph: StackGraph) {
     LocalOwnersProvider {
         graph.destinationFor(pageType).content(this)
     }
 }
 
 private fun stackNavViewModel(
-    graph: Graph,
+    graph: StackGraph,
     navController: NavController,
     viewModelStoreOwner: ViewModelStoreOwner
 ): StackNavViewModel {
@@ -193,7 +193,7 @@ private fun stackNavViewModel(
 }
 
 internal class StackNavViewModel(
-    private val graph: Graph,
+    private val graph: StackGraph,
     private val navController: NavController
 ) : ViewModel(), NavHostController, LifecycleEventObserver {
     private var hostLifecycleState: Lifecycle.State = Lifecycle.State.RESUMED

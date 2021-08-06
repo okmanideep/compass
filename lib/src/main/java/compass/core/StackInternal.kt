@@ -30,6 +30,17 @@ internal class StackInternal<T>() {
         entries.clear()
     }
 
+    fun peek(): T? {
+        return entries.lastOrNull()
+    }
+
+    fun bringToFront(entry: T) {
+        require(entries.contains(entry))
+
+        entries.remove(entry)
+        entries.add(entry)
+    }
+
     fun toList(): List<T> {
         return entries.toList()
     }
