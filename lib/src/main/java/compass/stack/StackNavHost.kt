@@ -2,35 +2,55 @@ package compass.stack
 
 import android.os.Parcelable
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.ExperimentalAnimationApi
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.*
+import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.layout.Box
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.*
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import compass.*
 import compass.core.StackInternal
 
-internal class Pages(
-    val pageContentByType: Map<String, @Composable (NavEntry) -> Unit>
+internal class Graph(
+    private val destinationByType: Map<String, Destination>
 ) {
+    fun destinationFor(pageType: String): Destination {
+        return destinationByType[pageType]
+            ?: throw IllegalArgumentException("No destination for $pageType")
+    }
 
     fun hasPageType(pageType: String): Boolean {
-        return pageContentByType.containsKey(pageType)
+        return destinationByType.containsKey(pageType)
     }
 }
 
-class PagesBuilder(
-    private val pageContentByType: HashMap<String, @Composable (NavEntry) -> Unit> = HashMap()
+internal class Destination(
+    val content: @Composable (NavEntry) -> Unit,
+    val isTransparent: Boolean,
+    val enterTransition: EnterTransition,
+    val exitTransition: ExitTransition,
+)
+
+class GraphBuilder
+internal constructor(
+    private val destinationByType: HashMap<String, Destination> = HashMap(),
 ) {
-    fun page(type: String, content: @Composable (NavEntry) -> Unit) {
-        pageContentByType[type] = content
+    fun page(
+        type: String,
+        isTransparent: Boolean = false,
+        enterTransition: EnterTransition = slideInHorizontally({ it }),
+        exitTransition: ExitTransition = slideOutHorizontally({ it }),
+        content: @Composable (NavEntry) -> Unit,
+    ) {
+        destinationByType[type] = Destination(
+            content, isTransparent, enterTransition, exitTransition
+        )
     }
 
-    internal fun build() = Pages(pageContentByType)
+    internal fun build() = Graph(destinationByType)
 }
 
 @ExperimentalAnimationApi
@@ -39,7 +59,7 @@ fun StackNavHost(
     navController: NavController,
     startDestination: Page,
     modifier: Modifier = Modifier,
-    builder: PagesBuilder.() -> Unit
+    builder: GraphBuilder.() -> Unit
 ) = StackNavHost(
     navController = navController,
     initialStack = listOf(startDestination),
@@ -53,16 +73,16 @@ fun StackNavHost(
     navController: NavController,
     initialStack: List<Page>,
     modifier: Modifier = Modifier,
-    builder: PagesBuilder.() -> Unit
+    builder: GraphBuilder.() -> Unit
 ) {
-    val pages = PagesBuilder().apply(builder).build()
+    val graph = GraphBuilder().apply(builder).build()
     val viewModelStoreOwner = checkNotNull(LocalViewModelStoreOwner.current) {
         "StackNavHost requires a ViewModelStoreOwner to be provided via LocalViewModelStoreOwner"
     }
 
-    val stackNavViewModel = remember(pages, navController, viewModelStoreOwner) {
+    val stackNavViewModel = remember(graph, navController, viewModelStoreOwner) {
         stackNavViewModel(
-            pages = pages,
+            graph = graph,
             navController = navController,
             viewModelStoreOwner = viewModelStoreOwner
         )
@@ -76,40 +96,96 @@ fun StackNavHost(
         navController.attachNavHostController(stackNavViewModel)
 
         onDispose {
+            stackNavViewModel.clearStack()
             navController.detachNavHostController()
         }
     }
 
-    val activeEntries = navController.state.activeEntries()
-    val canGoBack = navController.canGoBack
+    BackHandler(enabled = navController.canGoBack, onBack = { stackNavViewModel.goBack() })
 
-    BackHandler(enabled = canGoBack, onBack = { stackNavViewModel.goBack() })
+    PageStack(
+        backStack = navController.state,
+        graph = graph,
+        modifier = modifier
+    )
+}
+
+@Composable
+private fun PageStack(
+    backStack: NavBackStack,
+    graph: Graph,
+    modifier: Modifier = Modifier,
+) {
+    val transition = updateTransition(backStack, label = "Page Stack Transition")
 
     Box(modifier = modifier) {
-        for (entry in activeEntries) {
-            entry.LocalOwnersProvider {
-                AnimatedVisibility(
-                    visible = entry.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED),
-                    enter = slideInHorizontally({ it }),
-                    exit = fadeOut()
-                ) {
-                    val pageContentComposable = pages.pageContentByType[entry.pageType]!!
-                    pageContentComposable(entry)
-                }
+        // bottom entry
+        transition.AnimatedContent(
+            transitionSpec = { EnterTransition.None with ExitTransition.None }
+        ) {
+            val topEntry = it.entries.lastOrNull()
+            val topDestination = if (topEntry != null) {
+                graph.destinationFor(topEntry.pageType)
+            } else {
+                null
             }
+
+            if (topDestination?.isTransparent == true) {
+                check(it.entries.size > 1) { "First item in the stack can't be transparent" }
+
+                val bottomEntry = it.entries[it.entries.size - 2]
+                bottomEntry.Render(graph)
+            }
+        }
+
+        // top entry
+        transition.AnimatedContent(
+            transitionSpec = {
+                val initialTop = initialState.entries.lastOrNull()
+                val targetTop = targetState.entries.lastOrNull()
+
+                val enter = if (targetTop != null && !initialState.hasEntry(targetTop)) {// entering
+                    graph.destinationFor(targetTop.pageType).enterTransition
+                } else {
+                    // EnterTransition.None basically doesn't draw the content
+                    fadeIn(0.5f)
+                }
+
+                val exit = if (initialTop != null && !targetState.hasEntry(initialTop)) {
+                    graph.destinationFor(initialTop.pageType).exitTransition
+                } else {
+                    // ExitTransition.None basically doesn't draw the content
+                    fadeOut(0.5f)
+                }
+
+                enter with exit
+            }
+        ) {
+            it.entries.lastOrNull()?.Render(graph)
         }
     }
 }
 
+private fun NavBackStack.hasEntry(entry: NavEntry): Boolean {
+    return entries.contains(entry)
+}
+
+@Composable
+private fun NavEntry.Render(graph: Graph) {
+    LocalOwnersProvider {
+        graph.destinationFor(pageType).content(this)
+    }
+}
+
 private fun stackNavViewModel(
-    pages: Pages,
+    graph: Graph,
     navController: NavController,
     viewModelStoreOwner: ViewModelStoreOwner
 ): StackNavViewModel {
     val factory = object : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel?> create(modelClass: Class<T>): T {
-            return StackNavViewModel(pages, navController) as T
+            return StackNavViewModel(graph, navController) as T
         }
     }
 
@@ -117,14 +193,12 @@ private fun stackNavViewModel(
 }
 
 internal class StackNavViewModel(
-    private val pages: Pages,
+    private val graph: Graph,
     private val navController: NavController
 ) : ViewModel(), NavHostController, LifecycleEventObserver {
     private var hostLifecycleState: Lifecycle.State = Lifecycle.State.RESUMED
     private val stack = StackInternal<NavEntry>()
     private var listener: ((NavBackStack) -> Unit)? = null
-    var canGoBack by mutableStateOf(false)
-        private set
 
     /**
      * On Host Lifecycle Changed
@@ -141,7 +215,7 @@ internal class StackNavViewModel(
     }
 
     override fun canNavigateTo(pageType: String): Boolean {
-        return pages.hasPageType(pageType)
+        return graph.hasPageType(pageType)
     }
 
     override fun navigateTo(pageType: String, args: Parcelable?, replace: Boolean) {
@@ -153,7 +227,6 @@ internal class StackNavViewModel(
         if (replace) {
             stack.replace(entry)
         } else {
-            stack.removePoppedEntries()
             stack.add(entry)
         }
         updateState()
@@ -174,32 +247,33 @@ internal class StackNavViewModel(
     }
 
     override fun onCleared() {
-        for (entry in stack.asList()) {
-            entry.viewModelStore.clear()
-            entry.setLifecycleState(Lifecycle.State.DESTROYED)
-        }
+        clearStack()
 
         super.onCleared()
     }
 
+    fun clearStack() {
+        for (entry in stack.toList()) {
+            entry.viewModelStore.clear()
+            entry.setLifecycleState(Lifecycle.State.DESTROYED)
+        }
+
+        stack.clear()
+    }
+
     private fun onStateUpdated() {
-        canGoBack = stack.canPop()
-        listener?.invoke(NavBackStack(stack.asList()))
+        listener?.invoke(NavBackStack(stack.toList()))
     }
 
     private fun updateState() {
-        val entries = stack.asList()
+        val entries = stack.toList()
         for (i in entries.indices) {
             when {
-                i < stack.currentEntryIndex -> {
+                i < entries.size - 1 -> {
                     entries[i].setLifecycleState(capToHostLifecycle(Lifecycle.State.STARTED))
                 }
-                i == stack.currentEntryIndex -> {
+                i == entries.size - 1 -> {
                     entries[i].setLifecycleState(capToHostLifecycle(Lifecycle.State.RESUMED))
-                }
-                else -> { // closed entries
-                    entries[i].viewModelStore.clear()
-                    entries[i].setLifecycleState(Lifecycle.State.DESTROYED)
                 }
             }
         }

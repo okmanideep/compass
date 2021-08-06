@@ -46,10 +46,11 @@ class NavController(private val parent: NavController?) {
         hostController?.let {
             if (it.canNavigateTo(pageType)) {
                 it.navigateTo(pageType, args, replace)
-            } else {
-                parent?.navigateTo(pageType, args, replace)
-            } ?: parent?.navigateTo(pageType, args, replace)
+                return
+            }
         }
+
+        parent?.navigateTo(pageType, args, replace)
     }
 
     fun goBack() {

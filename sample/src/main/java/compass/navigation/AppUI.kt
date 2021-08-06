@@ -12,6 +12,7 @@ import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import compass.NavController
 import compass.NavEntry
 import compass.Page
 import compass.getNavController
@@ -89,7 +90,11 @@ fun App() {
         }
 
         page(PageType.DETAIL.key) {
-            DetailPageUI(it.args as DetailPage)
+            DetailPageUI(it.args as DetailPage, navController)
+        }
+
+        page(PageType.WATCH.key) {
+            WatchPageUI(page = it.args as WatchPage)
         }
     }
 }
@@ -106,48 +111,39 @@ fun HomePageUI() {
 }
 
 @Composable
-fun DetailPageUI(page: DetailPage) {
+fun DetailPageUI(
+    page: DetailPage,
+    navController: NavController
+) {
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colors.background)
     ) {
-        val detailNavController = getNavController()
-        StackNavHost(
-            navController = detailNavController, startDestination = page.toPage()
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colors.background)
         ) {
-            page(PageType.DETAIL.key) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colors.background)
-                ) {
-                    val detailPage = it.args as DetailPage
-                    Column(modifier = Modifier.align(Alignment.Center)) {
-                        Text(
-                            text = "DETAIL - ${page.contentId}",
-                        )
+            Column(modifier = Modifier.align(Alignment.Center)) {
+                Text(
+                    text = "DETAIL - ${page.contentId}",
+                )
 
-                        Button(onClick = {
-                            val page = WatchPage(detailPage.contentId)
-                            detailNavController.navigateTo(
-                                page.pageType.key,
-                                page,
-                                false
-                            )
-                        }) {
-                            Text("WATCH")
-                        }
-                    }
+                Button(onClick = {
+                    val watchPage = WatchPage(page.contentId)
+                    navController.navigateTo(
+                        watchPage.pageType.key,
+                        watchPage,
+                        false
+                    )
+                }) {
+                    Text("WATCH")
                 }
             }
-
-            page(PageType.WATCH.key) {
-                WatchPageUI(page = it.args as WatchPage)
-            }
-
         }
     }
+
 }
 
 @Composable

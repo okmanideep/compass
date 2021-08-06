@@ -30,6 +30,18 @@ class NavEntry(
     override fun getViewModelStore(): ViewModelStore {
         return viewModelStore
     }
+
+    override fun equals(other: Any?): Boolean {
+        return (other is NavEntry && other.id == id)
+    }
+
+    override fun hashCode(): Int {
+        return id.hashCode()
+    }
+
+    override fun toString(): String {
+        return "NavEntry:$pageType/$id"
+    }
 }
 
 @Composable
@@ -41,4 +53,20 @@ fun NavEntry.LocalOwnersProvider(content: @Composable () -> Unit) {
     ) {
         content()
     }
+}
+
+fun LifecycleOwner.isDestroyed(): Boolean {
+    return lifecycle.currentState == Lifecycle.State.DESTROYED
+}
+
+fun LifecycleOwner.isAtLeastStarted(): Boolean {
+    return lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+}
+
+fun LifecycleOwner.isStarted(): Boolean {
+    return lifecycle.currentState == Lifecycle.State.STARTED
+}
+
+fun LifecycleOwner.isResumed(): Boolean {
+    return lifecycle.currentState == Lifecycle.State.RESUMED
 }
