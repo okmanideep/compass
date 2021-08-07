@@ -80,11 +80,11 @@ fun TabNavHost(
     modifier: Modifier = Modifier,
     navController: NavController = getNavController(),
     startTransition: ContentTransform
-        = slideInHorizontally() + fadeIn(0.8f)
-            with slideOutHorizontally( {it/2}) + fadeOut(0.8f),
+        = slideInHorizontally({-it }) + fadeIn(0.8f)
+            with slideOutHorizontally( {it}) + fadeOut(0.8f),
     endTransition: ContentTransform
-        = slideInHorizontally({it/2}) + fadeIn(0.8f)
-            with slideOutHorizontally( {-it/2}) + fadeOut(0.8f),
+        = slideInHorizontally({it}) + fadeIn(0.8f)
+            with slideOutHorizontally( {-it}) + fadeOut(0.8f),
     builder: TabGraphBuilder.() -> Unit
 ) {
     val graph = remember { TabGraphBuilder().apply(builder).build(startTransition, endTransition) }

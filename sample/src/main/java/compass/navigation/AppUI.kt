@@ -1,6 +1,7 @@
 package compass.navigation
 
 import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.runtime.Composable
 import compass.Page
 import compass.getNavController
@@ -11,6 +12,7 @@ enum class RootPage(val key: String) {
     MAIN("main"),
 }
 
+@ExperimentalFoundationApi
 @ExperimentalAnimationApi
 @Composable
 fun App() {

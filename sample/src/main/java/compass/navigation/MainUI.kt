@@ -1,5 +1,6 @@
 package compass.navigation
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,6 +31,7 @@ enum class MainTab(
     PROFILE("profile", Icons.Filled.Person)
 }
 
+@ExperimentalFoundationApi
 @Composable
 fun MainPageUI() {
     val navController = getNavController()
@@ -53,6 +55,7 @@ fun MainPageUI() {
 
 }
 
+@ExperimentalFoundationApi
 @Composable
 fun TabUI(modifier: Modifier = Modifier) {
     TabNavHost(
@@ -66,7 +69,7 @@ fun TabUI(modifier: Modifier = Modifier) {
         }
 
         tab(type = MainTab.EXPLORE.key) {
-            WIPTab("Explore")
+            ExploreUI()
         }
 
         tab(type = MainTab.PROFILE.key) {
