@@ -77,8 +77,8 @@ internal constructor(
 
 @Composable
 fun TabNavHost(
-    navController: NavController,
     modifier: Modifier = Modifier,
+    navController: NavController = getNavController(),
     startTransition: ContentTransform
         = slideInHorizontally() + fadeIn(0.8f)
             with slideOutHorizontally( {it/2}) + fadeOut(0.8f),
@@ -124,17 +124,23 @@ private fun TabStack(
     Box(modifier = modifier) {
         transition.AnimatedContent(
             transitionSpec = {
-                val prevTab = initialState.entries.last().pageType
-                val nextTab = targetState.entries.last().pageType
+                val prevTab = initialState.entries.lastOrNull()?.pageType
+                val nextTab = targetState.entries.lastOrNull()?.pageType
 
                 val tabs = graph.tabs
                 val prevTabIndex = tabs.indexOf(prevTab)
                 val nextTabIndex = tabs.indexOf(nextTab)
 
-                if (nextTabIndex > prevTabIndex) {
-                    graph.endTransition
-                } else {
-                    graph.startTransition
+                when {
+                    nextTabIndex > prevTabIndex -> {
+                        graph.endTransition
+                    }
+                    nextTabIndex < prevTabIndex -> {
+                        graph.startTransition
+                    }
+                    else -> {
+                        EnterTransition.None with ExitTransition.None
+                    }
                 }
             }
         ) {
@@ -201,11 +207,13 @@ internal class TabNavViewModel(
     }
 
     override fun navigateTo(pageType: String, args: Parcelable?, replace: Boolean) {
-        if (tabToEntryMap.containsKey(pageType)) {
-            stack.bringToFront(tabToEntryMap[pageType]!!)
+        val entry = getEntry(pageType, args)
+        if (stack.contains(entry)) {
+            stack.bringToFront(entry)
         } else {
-            stack.add(getEntry(pageType, args))
+            stack.add(entry)
         }
+        updateState()
     }
 
     override fun canGoBack(): Boolean {

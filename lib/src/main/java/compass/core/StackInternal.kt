@@ -34,6 +34,10 @@ internal class StackInternal<T>() {
         return entries.lastOrNull()
     }
 
+    fun contains(entry: T): Boolean {
+        return entries.contains(entry)
+    }
+
     fun bringToFront(entry: T) {
         require(entries.contains(entry))
 
