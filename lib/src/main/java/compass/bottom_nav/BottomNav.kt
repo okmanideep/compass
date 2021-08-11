@@ -73,8 +73,8 @@ fun BottomNavHost(
             ) {
                 AnimatedVisibility(
                     visible = entry.isResumed(),
-                    enter = fadeIn(),
-                    exit = fadeOut()
+                    enter = slideInHorizontally({500}),
+                    exit = slideOutHorizontally({-400})
                 ) {
                     val pageContentComposable = pages.pageContentByType[entry.page.type]!!
                     pageContentComposable(entry.page)

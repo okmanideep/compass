@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import compass.*
+import compass.bottom_nav.BottomNavHost
 import compass.stack_nav.StackNavHost
 import kotlinx.parcelize.Parcelize
 
@@ -152,7 +153,7 @@ fun HomePageUI() {
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(innerPadding)
-                        .background(MaterialTheme.colors.background)
+                        .background(Color.Yellow)
                 ) {
                     val parentVMSO = LocalParentViewModelStoreOwner.current.hashCode()
                     Text(text = "Tab2 $parentVMSO", modifier = Modifier.align(Alignment.Center))
@@ -164,7 +165,7 @@ fun HomePageUI() {
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(innerPadding)
-                        .background(MaterialTheme.colors.background)
+                        .background(Color.Blue)
                 ) {
                     val parentVMSO = LocalParentViewModelStoreOwner.current.hashCode()
                     Text(text = "Tab3 $parentVMSO", modifier = Modifier.align(Alignment.Center))
@@ -176,7 +177,7 @@ fun HomePageUI() {
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(innerPadding)
-                        .background(MaterialTheme.colors.background)
+                        .background(Color.Gray)
                 ) {
                     val parentVMSO = LocalParentViewModelStoreOwner.current.hashCode()
                     Text(text = "Tab4 $parentVMSO", modifier = Modifier.align(Alignment.Center))
