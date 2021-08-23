@@ -1,35 +1,27 @@
 package compass
 
 import android.os.Parcelable
-import android.util.Log
 import androidx.compose.runtime.*
-import androidx.lifecycle.*
-import compass.core.NavContext
-import compass.core.NavEntry
-import compass.core.NavHostController
-import compass.core.NavState
 
 @Composable
 fun getNavController(): NavController {
-    val navContext = LocalNavContext.current
+    return LocalNavController.current
         ?: remember {
-            object : NavContext {
-                override fun owner(): NavController? {
-                    return null
-                }
-
-                override fun controller(): NavController {
-                    return NavController(this)
-                }
-            }
+            NavController(null)
         }
-
-    return navContext.controller()
 }
 
-class NavController(val navContext: NavContext) {
+interface NavHostController {
+    fun setStateChangedListener(listener: (NavBackStack) -> Unit)
+    fun canNavigateTo(pageType: String): Boolean
+    fun navigateTo(pageType: String, args: Parcelable? = null, replace: Boolean = false)
+    fun canGoBack(): Boolean
+    fun goBack(): Boolean
+}
+
+class NavController(private val parent: NavController?) {
     private var hostController: NavHostController? = null
-    var state by mutableStateOf<NavState?>(null)
+    var state by mutableStateOf(NavBackStack())
         private set
     var canGoBack by mutableStateOf(false)
         private set
@@ -43,7 +35,6 @@ class NavController(val navContext: NavContext) {
         navHostController.setStateChangedListener { state ->
             this.state = state
             this.canGoBack = navHostController.canGoBack()
-            Log.e("StateUpdated: $navHostController", state.debugLog())
         }
     }
 
@@ -51,24 +42,23 @@ class NavController(val navContext: NavContext) {
         hostController = null
     }
 
-    /**
-     * @param pageExtras are for passing extra info required for page business logic eg. ContentId
-     * @param navOptions are for extras like clearTop, replace etc flags
-     * */
-
-    fun navigateTo(page: Page, pageExtras: Parcelable?, navOptions: NavOptions) {
+    fun navigateTo(pageType: String, args: Parcelable? = null, replace: Boolean = false) {
         hostController?.let {
-            if (it.canNavigateTo(page = page)) {
-                val navEntry = createNavEntry(page, this)
-                it.navigateTo(navEntry = navEntry, null, navOptions)
-            } else navContext.owner()?.navigateTo(page, pageExtras, navOptions)
-        } ?: navContext.owner()?.navigateTo(page, pageExtras, navOptions)
+            if (it.canNavigateTo(pageType)) {
+                it.navigateTo(pageType, args, replace)
+                return
+            }
+        }
+
+        parent?.navigateTo(pageType, args, replace)
     }
 
-    private fun createNavEntry(page: Page, navController: NavController): NavEntry {
-        return NavEntry(page = page, baseNavController = navController)
+    fun goBack() {
+        if (hostController?.goBack() != true) {
+            parent?.goBack()
+        }
     }
 }
 
-val LocalNavContext = compositionLocalOf<NavContext?> { null }
-val LocalParentViewModelStoreOwner = compositionLocalOf<ViewModelStoreOwner?> { null }
+val LocalNavController = compositionLocalOf<NavController?> { null }
+
