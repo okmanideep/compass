@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.*
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
@@ -120,7 +121,7 @@ private fun TabStack(
     modifier: Modifier = Modifier,
 ) {
     val transition = updateTransition(backStack, label = "Tab Stack Transition")
-
+    val saveableStateHolder = rememberSaveableStateHolder()
     Box(modifier = modifier) {
         transition.AnimatedContent(
             transitionSpec = {
@@ -144,7 +145,12 @@ private fun TabStack(
                 }
             }
         ) {
-            it.entries.lastOrNull()?.Render(graph)
+            val entry = it.entries.lastOrNull()
+            if (entry != null) {
+                saveableStateHolder.SaveableStateProvider(key = entry.id) {
+                    entry.Render(graph)
+                }
+            }
         }
     }
 }

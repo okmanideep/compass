@@ -17,6 +17,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import compass.navigation.common.Counter
 import kotlin.math.roundToInt
 
 @Composable
@@ -75,6 +76,9 @@ private fun FeedTitle() {
 @Composable
 fun HomeFeed() {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
+        item {
+            Counter()
+        }
         items(100, key = { it }) {
             HomeFeedItem(it + 1)
             Spacer(Modifier.height(16.dp))
