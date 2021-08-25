@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.*
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
@@ -117,7 +118,7 @@ private fun PageStack(
     modifier: Modifier = Modifier,
 ) {
     val transition = updateTransition(backStack, label = "Page Stack Transition")
-
+    val saveableStateHolder = rememberSaveableStateHolder()
     Box(modifier = modifier) {
         // bottom entry
         transition.AnimatedContent(
@@ -134,7 +135,9 @@ private fun PageStack(
                 check(it.entries.size > 1) { "First item in the stack can't be transparent" }
 
                 val bottomEntry = it.entries[it.entries.size - 2]
-                bottomEntry.Render(graph)
+                saveableStateHolder.SaveableStateProvider(key = bottomEntry.id) {
+                    bottomEntry.Render(graph)
+                }
             }
         }
 
@@ -161,7 +164,12 @@ private fun PageStack(
                 enter with exit
             }
         ) {
-            it.entries.lastOrNull()?.Render(graph)
+            val topEntry = it.entries.lastOrNull()
+            if (topEntry != null) {
+                saveableStateHolder.SaveableStateProvider(key = topEntry.id) {
+                    topEntry.Render(graph)
+                }
+            }
         }
     }
 }

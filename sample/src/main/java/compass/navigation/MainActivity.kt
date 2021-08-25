@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
@@ -15,6 +16,7 @@ import compass.navigation.ui.theme.CompassTheme
 class MainActivity : ComponentActivity(){
     private var rootNavController: NavController? = null
 
+    @ExperimentalFoundationApi
     @ExperimentalAnimationApi
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -22,7 +24,7 @@ class MainActivity : ComponentActivity(){
             CompassTheme {
                 // A surface container using the 'background' color from the theme
                 Surface(color = MaterialTheme.colors.background) {
-                    App()
+                    Sample2()
                 }
             }
         }
